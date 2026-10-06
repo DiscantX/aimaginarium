@@ -1,0 +1,8 @@
+# Qdrant Local Isolated Database
+.qdrant_storage/
+storage/
+.qdrant-initialized
+snapshots/
+
+# Python
+.venv/
