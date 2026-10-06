@@ -19,7 +19,7 @@
 - **Model tiering.** Which tasks go to which models (the check ruling is mostly classification; the narration call needs the strongest model).
 - **Embeddings.** Which embedding model, what is embedded (lore, past narration, summaries, rulings), and how retrieval is combined with the structured store.
 - **Strict-causality mode.** It requires a world simulation rich enough to generate drama unaided; how much is deterministic code versus LLM work is a stack question.
-- **Evaluation and replay harness.** Replaying logged scenarios under different directors, and measuring tier/outcome distributions, needs tooling decisions early.
+- **Evaluation and replay harness.** See [evaluation-and-replay.md](evaluation-and-replay.md).
 - **Packaging and configuration.** BYOK key handling (see the open question about whose key pays in a shared world).
 
 ## What the repo already contains
@@ -29,4 +29,4 @@
 - `local_llm/` holds Ollama runner scripts (`run_ollama_optimized.ps1` and a `.bat`) and `local_llm/tests/sample-rpg-local.py`, a sample text-RPG test script.
 - `.gitignore` already excludes Qdrant local storage paths (`.qdrant_storage/`, `storage/`, `.qdrant-initialized`, `snapshots/`) and `.venv/`.
 
-**[Open]** Whether a local-model option (Ollama) belongs in the provider abstraction alongside Gemini, since the scripts suggest local models have been tried.
+**[Decided]** A local model (Ollama) is a candidate provider alongside Gemini and other API providers. The runner and sample are verified working with a manageable response time. **[Open]** Output quality is untested; see [evaluation and replay](evaluation-and-replay.md). **[Proposed]** The provider abstraction declares per-provider capabilities (schema enforcement, caching, tool calling) and uses validate-and-retry as the common floor. The sample uses Ollama's plain JSON mode (syntax only); whether the installed version accepts a full JSON schema needs verifying.

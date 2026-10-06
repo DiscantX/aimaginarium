@@ -6,6 +6,12 @@
 
 **[Decided]** The engine provides **mechanisms**; campaign design supplies **policy**. Chosen-one stances, strict declaration, journal visibility, reward style and similar questions are campaign or ruleset settings that the engine must be able to express, not hard-coded behavior.
 
+## Table settings
+
+**[Decided]** Table settings (content boundaries, tone, lethality, rules strictness and similar) are set at world creation and may be adjusted part way through. They are not placed in every prompt, to save context.
+
+**[Proposed]** Settings live in the world record. Only those that differ from the default reach the prompt, as a line or two. Settings that code can enforce are applied by the ruleset and need no prompting. Provider-side content filters exist separately from player settings.
+
 ## Layers
 
 1. **Core engine** (always present, whatever the story model).

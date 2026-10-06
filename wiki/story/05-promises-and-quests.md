@@ -36,3 +36,9 @@ In a sandbox the player chooses which threads to pull, so the principle is resta
 **[Proposed]** Fuller direction for later: detail stubs. Committed entities are the goal-bearing ones (the dragon is created in full with motivations); route-like entities (the boat, the key) are stubs with a name, a location and tags, fleshed out on first engagement.
 
 **[Open]** Tuning the significance distribution and its pacing rule.
+
+## Session boundaries
+
+**[Decided]** A session boundary comes at the end of a plotline (or when a quest is solved, if quests are used). It is not the moment the goal is met: after defeating the ogre the player may stay to loot. The boundary is when the player steps outside and must choose their *next goal*, not their next action.
+
+**[Open]** How the engine frames this (for example, a state in which the current goal is resolved and the next is open). It connects to the Proposed sheet revision at quiet moments ([03](03-character-desire-opposition.md)).

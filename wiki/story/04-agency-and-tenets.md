@@ -40,3 +40,13 @@ The problem: "I attack the orc" without saying how. Fists, equipped sword, spell
 **[Decided]** Mind-affecting effects are generalized, and the engine tracks effects the player is under (movement restrictions, mental impairment, and so on).
 
 **[Proposed]** An effect is a record with source, target, duration, tags and a constraint that the ruleset translates into mechanics. Active effects go into every prompt. Durations tick in the target's own time frame (see [../architecture/time-and-knowledge.md](../architecture/time-and-knowledge.md)). Perception effects change the projection the player receives (a blind character is not given visual description). Effects **interfere with a declared action after it is declared** ("you try to strike, but your arm will not obey") and never pre-empt it.
+
+## Failure and recovery
+
+**[Decided]** The player never truly loses. There is always a way to recover and continue, unless the campaign sets a permadeath mode. Consequences are still real (see [06](06-llm-failure-modes.md#softening-versus-recoverability)); recoverability is a property of what the world offers afterward, not a reduction in what happened.
+
+**[Decided]** What recovery looks like is situational and world-dependent, and will be tuned in testing. The AI decides how it happens, in a way that fits the story: resurrection, escape, someone bailing the player out. Resurrection needs a god or mechanism in the world. Recovery must be plausible and explained, never hand-waved ("the local priest resurrected you, carry on").
+
+**[Proposed]** To make "explained" checkable, the AI's recovery cites something that already exists in the world (the god, the rival who wants the player alive), and the engine validates that it exists. To be settled in the pipeline discussion.
+
+**[Open]** The range of defeat outcomes the engine must be able to express (capture instead of killing, rescue, a costly revival, a setback in standing or resources). This is mostly campaign policy. It also interacts with world-resolved outcomes (the village burned while the player dithered): the world can lose something permanently while the player can still continue.
