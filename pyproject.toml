@@ -8,6 +8,7 @@ version = "0.0.1"
 description = "A D&D-style tabletop RPG engine in which an LLM acts as dungeon master."
 requires-python = ">=3.10"
 dependencies = [
+    "httpx>=0.27",
     "pydantic>=2.5",
 ]
 
