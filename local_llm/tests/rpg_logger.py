@@ -44,19 +44,30 @@ class RPGLogger:
         self._write_entry(f"⚡ Model Preload Completed in: {seconds:.3f} seconds\n")
 
     def log_turn(self, player_input: str, system_prompt: str, output_text: str, 
-                 time_to_first_token: float, total_generation_time: float):
+                 time_to_first_token: float, total_generation_time: float,
+                 conversation_history: list[dict] | None = None, actual_tokens: int | None = None):
         """
-        Calculates approximate feed size and records raw latency metrics 
-        for an individual action evaluation.
+        Calculates actual or approximate feed size including conversation history
+        and records raw latency metrics for an individual action evaluation.
         """
-        # Rule of thumb calculation: 1 word ~ 0.75 tokens -> Words / 0.75
-        approx_prompt_words = len((system_prompt + player_input).split())
-        approx_prompt_tokens = int(approx_prompt_words / 0.75)
-
         self._write_entry("--- ACTION TRANSACTION TURN ---")
         self._write_entry(f"⏱️ Time to First Token:  {time_to_first_token:.3f}s")
         self._write_entry(f"⏱️ Total Response Time: {total_generation_time:.3f}s")
-        self._write_entry(f"📊 Approximate Input Context Fed: {approx_prompt_tokens} tokens")
+
+        if actual_tokens is not None:
+            self._write_entry(f"📊 Input Context Fed (Actual): {actual_tokens} tokens")
+        else:
+            # Build full prompt text including system prompt, history, and player input
+            history_text = ""
+            if conversation_history:
+                for msg in conversation_history:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    history_text += f" {role}: {content}"
+            full_prompt = system_prompt + history_text + f" The player attempts to: {player_input}"
+            approx_prompt_words = len(full_prompt.split())
+            approx_prompt_tokens = int(approx_prompt_words / 0.75)
+            self._write_entry(f"📊 Approximate Input Context Fed (True Prompt): {approx_prompt_tokens} tokens")
         
         if self.verbose:
             self._write_entry(f"📥 Player Action Sent: \"{player_input.strip()}\"")

@@ -8,8 +8,12 @@ from rpg_logger import RPGLogger  # 📥 Import your modular logger
 MODEL_NAME = "phi4-mini"
 NUM_CTX = 12288
 TEMPERATURE = 0.85
-NUM_THREAD = 4
+NUM_THREAD = 2
 VERBOSE_LOGGING = True  # Toggle this to False if you want to skip dialogue tracking
+MAX_HISTORY_MESSAGES = 20  # Maximum number of historical messages (user/assistant turns) to include
+
+# Conversation history tracking
+conversation_history = []
 
 # 1. Initialize your state and the tracking module
 game_state = {
@@ -96,18 +100,19 @@ def get_llm_turn_and_stream(player_action):
     narrative_buffer = ""
     inside_narrative = False
     escaped = False
+    prompt_eval_count = None
     
     # --- PERFORMANCE TIMING START ---
     start_call = time.perf_counter()
     first_token_time = 0.0
 
     with loader:
+        history_subset = conversation_history[-MAX_HISTORY_MESSAGES:] if MAX_HISTORY_MESSAGES > 0 else []
+        messages_payload = [{"role": "system", "content": system_prompt}] + history_subset + [{"role": "user", "content": f"The player attempts to: {player_action}"}]
+        
         response_stream = ollama.chat(
             model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"The player attempts to: {player_action}"}
-            ],
+            messages=messages_payload,
             format="json", 
             stream=True,
             options={
@@ -122,7 +127,12 @@ def get_llm_turn_and_stream(player_action):
         try:
             first_chunk = next(stream_iterator)
             first_token_time = time.perf_counter() - start_call  # ⏱️ Catch Time To First Token!
-            first_token = first_chunk['message']['content']
+            if hasattr(first_chunk, 'prompt_eval_count') and first_chunk.prompt_eval_count:
+                prompt_eval_count = first_chunk.prompt_eval_count
+            elif isinstance(first_chunk, dict) and first_chunk.get('prompt_eval_count'):
+                prompt_eval_count = first_chunk.get('prompt_eval_count')
+
+            first_token = first_chunk.message.content if hasattr(first_chunk, 'message') else first_chunk.get('message', {}).get('content', '')
             full_text += first_token
         except StopIteration:
             first_token = ""
@@ -140,7 +150,12 @@ def get_llm_turn_and_stream(player_action):
 
     stream_buffer = ""
     for chunk in stream_iterator:
-        token = chunk['message']['content']
+        if hasattr(chunk, 'prompt_eval_count') and chunk.prompt_eval_count:
+            prompt_eval_count = chunk.prompt_eval_count
+        elif isinstance(chunk, dict) and chunk.get('prompt_eval_count'):
+            prompt_eval_count = chunk.get('prompt_eval_count')
+
+        token = chunk.message.content if hasattr(chunk, 'message') else chunk.get('message', {}).get('content', '')
         full_text += token
         
         if not inside_narrative:
@@ -200,11 +215,38 @@ def get_llm_turn_and_stream(player_action):
         system_prompt=system_prompt,
         output_text=final_data.get("narrative", ""),
         time_to_first_token=first_token_time,
-        total_generation_time=total_generation_time
+        total_generation_time=total_generation_time,
+        conversation_history=history_subset,
+        actual_tokens=prompt_eval_count
     )
 
     if "narrative" in final_data:
-        final_data["narrative"] = final_data["narrative"].replace("[BREAK]", "\n\n")
+        narrative = final_data["narrative"]
+        if "[BREAK]" in narrative:
+            narrative = narrative.replace("[BREAK]", "\n\n")
+        else:
+            # Fallback: automatically split into 3 paragraphs by sentence boundaries if [BREAK] is missing
+            import re
+            sentences = re.split(r'(?<=[.!?])\s+', narrative.strip())
+            if len(sentences) > 2:
+                num_paras = 3
+                chunk_size = max(1, len(sentences) // num_paras)
+                paragraphs = []
+                current_chunk = []
+                for s in sentences:
+                    current_chunk.append(s)
+                    if len(current_chunk) >= chunk_size and len(paragraphs) < num_paras - 1:
+                        paragraphs.append(" ".join(current_chunk))
+                        current_chunk = []
+                if current_chunk:
+                    paragraphs.append(" ".join(current_chunk))
+                narrative = "\n\n".join(paragraphs)
+        final_data["narrative"] = narrative
+
+    # Append to conversation history
+    conversation_history.append({"role": "user", "content": f"The player attempts to: {player_action}"})
+    conversation_history.append({"role": "assistant", "content": full_text})
+
     return final_data
 
 # --- MAIN GAME LOOP RUNNER ---
