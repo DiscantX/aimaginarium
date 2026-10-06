@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aimaginarium"
+version = "0.0.1"
+description = "A D&D-style tabletop RPG engine in which an LLM acts as dungeon master."
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+include = ["aimaginarium*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
