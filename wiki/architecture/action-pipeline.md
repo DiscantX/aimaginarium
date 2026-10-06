@@ -19,6 +19,10 @@
 
 The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mechanical errors (granting an item that does not exist, killing someone already dead). A second LLM call to re-judge feasibility is not planned. Scrutiny can be proportional to stakes: reversible low-stakes changes commit freely, permanent or world-level ones may warrant an optional second-opinion call, off by default.
 
+## When a check is called for
+
+**[Decided]** A check is called for only when failure would change the story in an interesting way and the outcome is genuinely uncertain. Otherwise the DM narrates success, or says the action cannot work, with no roll. The LLM makes this call in call 1, informed by the precedent log. (Ficus notes this is more or less standard DM practice.)
+
 ## Check turns
 
 **[Decided]** Turns that need a dice check use **two LLM calls**; turns without a check use one.

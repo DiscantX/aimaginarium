@@ -23,5 +23,8 @@
 ## Open
 
 - **[Open]** BYOK in a shared world: whose key pays for a world tick, the host's or the players'?
-- **[Open]** Turn structure for parties (simultaneous, sequential, scene-based).
+- **[Decided]** Distinguish **co-op** (one party, where spotlight matters) from **MMO-style** (a shared world where every player has agency).
+- **[Decided, leaning]** Parties use **free-form scene** handling, because sequential and simultaneous turns only work for small parties and break down at MMO scale. A turn orchestrator for 2 to 8 players could be a later feature, and all three modes could in theory be offered and chosen at game start.
+- **[Decided]** Deferred until single player is solid, but everything is built with multiple players in mind.
+- **[Proposed]** Practical consequence for now: every action has an actor, and the server is the single writer.
 - **[Open]** MMO world simulation when no players are present.

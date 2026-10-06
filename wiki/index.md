@@ -16,7 +16,10 @@ Planning essays, kept as discrete topic files. Read [../CONTEXT.md](../CONTEXT.m
 4. [Player agency and narration tenets](story/04-agency-and-tenets.md): never decide for the player, no menus, "how?", effects
 5. [Promises, setups and quests](story/05-promises-and-quests.md): promise ledger, quest model, player attention and significance
 
-Remaining lenses: interactive-narrative literature (drama managers, storylets), tabletop GM craft, LLM failure modes. Open source question: the Weis/Hickman cycles essay.
+6. [LLM failure modes] (draft notes, not yet discussed)(story/06-llm-failure-modes.md): fourteen failure modes mapped to mitigations, softening versus recoverability, the local model option
+7. [Interactive narrative literature] (draft notes, not yet discussed)(story/07-interactive-narrative.md): drama managers, Façade, Left 4 Dead's director, storylets, candidate directors
+
+Tabletop GM craft was covered in discussion and recorded in the action pipeline, essays 04 and 05, and the multiplayer and core-engine files, with no separate essay. Open source question: the Weis/Hickman cycles essay.
 
 ## Architecture
 
@@ -28,6 +31,7 @@ Remaining lenses: interactive-narrative literature (drama managers, storylets), 
 ## Tech
 
 - [Tech stack (draft)](tech/tech-stack.md)
+- [Evaluation and replay](tech/evaluation-and-replay.md)
 
 ## Tracking
 
