@@ -9,10 +9,10 @@ import asyncio
 import sys
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from aimaginarium.llm import Message, Request, StructuredCaller, narration_events
-from aimaginarium.llm.base import Chunk, Response
+from aimaginarium.llm import Message, NarrationExtractor, Request, StructuredCaller
+from aimaginarium.llm.base import Response
 from aimaginarium.llm.providers.ollama import OllamaProvider
 
 
@@ -23,6 +23,11 @@ class Item(BaseModel):
 
 class Turn(BaseModel):
     narration: str
+    items: list[Item] = []
+
+
+class ParagraphTurn(BaseModel):
+    narration: list[str] = Field(min_length=2)
     items: list[Item] = []
 
 
@@ -38,17 +43,26 @@ async def main(model: str) -> None:
     except Exception as exc:  # noqa: BLE001 - report whatever the server says
         print(f"   FAILED: {exc}")
 
-    print("2. Paragraph breaks through the streaming extractor")
+    print("2. Paragraph breaks: one string versus a list of paragraphs")
     request = Request(system=system, messages=(user,), schema=Turn)
-    text = "".join([e.text async for e in narration_events(ollama.stream(request)) if isinstance(e, Chunk)])
-    print(f"   {text.count(chr(10) * 2)} paragraph breaks in {len(text)} characters")
+    events = [e async for e in ollama.stream(request)]
+    raw = next(e for e in events if isinstance(e, Response))
+    narration = NarrationExtractor()
+    text = narration.feed(raw.text)
+    print(f"   string: {text.count(chr(10) * 2)} breaks, {raw.usage.output_tokens} output tokens")
+    print(f"   raw reply starts: {raw.text[:160]!r}")
+    try:
+        turn, response = await StructuredCaller(ollama).call(Request(system=system, messages=(user,)), ParagraphTurn)
+        print(f"   list: {len(turn.narration)} paragraphs, {response.usage.output_tokens} output tokens")
+    except Exception as exc:  # noqa: BLE001
+        print(f"   list FAILED: {exc}")
 
     print("3. Prompt cache on a repeated long prefix")
     long_system = system + "\n" + "The cave has many chambers and old marks on the walls. " * 120
     for attempt in (1, 2):
         events = [e async for e in ollama.stream(Request(system=long_system, messages=(user,)))]
         usage = next(e for e in events if isinstance(e, Response)).usage
-        print(f"   call {attempt}: prompt={usage.prompt_tokens} cached={usage.cached_tokens} latency={usage.latency:.1f}s")
+        print(f"   call {attempt}: prompt={usage.prompt_tokens} cached={usage.cached_tokens} output={usage.output_tokens} latency={usage.latency:.1f}s")
     await ollama.aclose()
 
 

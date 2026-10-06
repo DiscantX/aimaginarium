@@ -39,7 +39,7 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Proposed]** Function calling (text part plus a schema-checked call) is a later optimisation for models that handle it well; the engine does not need to know which strategy a provider used. Property order matters for streaming (Gemini has a property-ordering setting; to verify).
 
-**[Open]** The earlier `[BREAK]` marker in the Ollama sample came from a suggestion that forced-JSON mode strips newlines. Unconfirmed: an escaped `\n\n` is valid JSON. Test with `format="json"` and with a full schema.
+**[Open]** The earlier `[BREAK]` marker in the Ollama sample came from a suggestion that forced-JSON mode strips newlines. The probe found **no paragraph breaks** in a 490-character narration even with a full schema (where an escaped `\n\n` is valid), so the model is not producing them; whether the server suppresses them is not yet separated from the model ignoring the instruction. **[Proposed]** Make paragraphs structural: `"narration"` as a list of paragraph strings with `minItems`, so a break is guaranteed by the schema and the extractor emits a blank line between elements. Being tested by the probe.
 
 **[Proposed]** Changes commit in the background so the player can read and type while they validate. The turn queue is serialised per actor or scene, so the next prompt is always built from committed state. A rejected change triggers a repair call for the changes only, with no re-narration. Check turns commit the check request before the roll.
 
@@ -47,7 +47,9 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Decided]** Use the HTTP API directly (`httpx`, NDJSON streaming) and not the Python SDK. The SDK's `ChatResponse` (0.6.3) drops `prompt_eval_cached_count`, which Ollama's API docs list and the server logs suggest exists. The field depends on the server version; confirm on a live server.
 
-**[Open]** Whether the installed Ollama accepts a full JSON schema for `format`, and whether schemas with free-form `dict` fields are accepted by Ollama and Gemini.
+**[Verified]** Probe run on the author's machine (phi4-mini, October 2026): Ollama accepted a full JSON schema with a nested model and a free-form `dict` field, and the HTTP API reports `prompt_eval_cached_count` (a repeated 1,474-token prompt reported 1,473 cached; the first call reported 19). A CPU-only local model is slow (tens of seconds to minutes per turn), so streaming the narration and committing in the background matter.
+
+**[Open]** Whether Gemini accepts schemas with free-form `dict` fields.
 
 ## Prompts
 
