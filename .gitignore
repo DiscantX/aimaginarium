@@ -6,3 +6,7 @@ snapshots/
 
 # Python
 .venv/
+*.pyc
+
+# Project Specific
+logs/

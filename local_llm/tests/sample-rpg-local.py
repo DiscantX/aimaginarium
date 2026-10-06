@@ -2,10 +2,16 @@ import json
 import ollama
 import sys
 import time
-import threading
-import random
+from rpg_logger import RPGLogger  # 📥 Import your modular logger
 
-# 1. Initialize your strict state variables in Python
+# Game configuration constraints
+MODEL_NAME = "phi4-mini"
+NUM_CTX = 12288
+TEMPERATURE = 0.85
+NUM_THREAD = 4
+VERBOSE_LOGGING = True  # Toggle this to False if you want to skip dialogue tracking
+
+# 1. Initialize your state and the tracking module
 game_state = {
     "player_name": "Valen",
     "hp": 100,
@@ -14,54 +20,36 @@ game_state = {
     "current_location": "The Dusty Tavern"
 }
 
+logger = RPGLogger(verbose=VERBOSE_LOGGING)
+logger.log_settings(MODEL_NAME, NUM_CTX, TEMPERATURE, NUM_THREAD)
+
+# (Keep your original RPGNarrativeLoader class completely unchanged here)
 class RPGNarrativeLoader:
-    """
-    A modular, reusable context manager that handles a live-spinning loader 
-    with cycling playful messages in a background thread.
-    """
     def __init__(self):
         self.spin_symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        self.playful_messages = [
-            "Consulting the dark oracle...",
-            "Rolling hidden 20-sided dice...",
-            "Summoning aggressive goblins...",
-            "Stoking the tavern fireplace...",
-            "Polishing rusty daggers...",
-            "Weaving threads of fate...",
-            "Brewing terrible potions...",
-            "Bribing the local town guards..."
-        ]
+        self.playful_messages = ["Consulting the dark oracle...", "Rolling hidden 20-sided dice..."]
+        import threading
         self._stop_event = threading.Event()
         self._thread = None
-
     def _animate(self):
+        import random
         msg = random.choice(self.playful_messages)
         symbol_idx = 0
-        last_msg_change = time.time()
-        
         while not self._stop_event.is_set():
-            if time.time() - last_msg_change > 2.5:
-                msg = random.choice(self.playful_messages)
-                last_msg_change = time.time()
-                
             symbol = self.spin_symbols[symbol_idx % len(self.spin_symbols)]
             sys.stdout.write(f"\r\033[K \033[35m{symbol}\033[0m {msg}")
             sys.stdout.flush()
-            
             symbol_idx += 1
             time.sleep(0.08)
-
     def __enter__(self):
+        import threading
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._animate, daemon=True)
         self._thread.start()
         return self
-
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
-
     def stop(self):
-        """Explicitly stops the animation thread and clears the terminal line."""
         if not self._stop_event.is_set():
             self._stop_event.set()
             if self._thread:
@@ -70,26 +58,31 @@ class RPGNarrativeLoader:
             sys.stdout.flush()
 
 
-def preload_model(model_name="phi4-mini"):
-    print(f"🔄 Preloading model '{model_name}' into memory... Please wait.", end="", flush=True)
-    ollama.generate(model=model_name, prompt="", options={"num_ctx": 2048})
+def preload_model():
+    print(f"🔄 Preloading model '{MODEL_NAME}' into memory... Please wait.", end="", flush=True)
+    start_preload = time.perf_counter()
+    
+    ollama.generate(model=MODEL_NAME, prompt="", options={"num_ctx": NUM_CTX, "num_thread": NUM_THREAD})
+    
+    end_preload = time.perf_counter()
+    preload_duration = end_preload - start_preload
+    
     print("\r✨ Model preloaded successfully! Ready to play.                 \n")
+    logger.log_preload_time(preload_duration) # Log it!
 
 
 def get_llm_turn_and_stream(player_action):
     system_prompt = (
         "You are the Game Master of a grim text RPG. Your job is to resolve the player's action.\n"
         "You must evaluate if the action succeeds, write a descriptive atmosphere, and return stat modifiers.\n\n"
-        
         "CRITICAL STORYTELLING REQUIREMENT:\n"
-        "The 'narrative' text value MUST be a fully fleshed out, deep, and atmospheric story. "
-        "It must consist of EXACTLY 3 distinct, long paragraphs separated by newline characters (\\n\\n). "
-        "Do not summarize or cut the description short.\n\n"
-        
+        "The 'narrative' text value MUST be a long, deeply descriptive story block consisting of EXACTLY "
+        "3 long paragraphs. Because you are inside a JSON string, you must NOT use literal line breaks. "
+        "Instead, place the literal marker '[BREAK]' between your paragraphs so the game engine can format them.\n\n"
         f"CURRENT WORLD STATE:\n{json.dumps(game_state, indent=2)}\n\n"
         "CRITICAL: You must reply ONLY with a single valid JSON object matching this exact schema:\n"
         "{\n"
-        '  "narrative": "Your deep 3-paragraph story goes here...",\n'
+        '  "narrative": "Paragraph one... [BREAK] Paragraph two... [BREAK] Paragraph three...",\n'
         '  "hp_modifier": -10 or 20 or 0,\n'
         '  "gold_modifier": -5 or 15 or 0,\n'
         '  "item_discovered": "item_name" or null,\n'
@@ -98,17 +91,19 @@ def get_llm_turn_and_stream(player_action):
         "}"
     )
 
-
     loader = RPGNarrativeLoader()
     full_text = ""
     narrative_buffer = ""
     inside_narrative = False
     escaped = False
     
-    # Start the loading animation
+    # --- PERFORMANCE TIMING START ---
+    start_call = time.perf_counter()
+    first_token_time = 0.0
+
     with loader:
         response_stream = ollama.chat(
-            model="phi4-mini",
+            model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"The player attempts to: {player_action}"}
@@ -116,29 +111,22 @@ def get_llm_turn_and_stream(player_action):
             format="json", 
             stream=True,
             options={
-                "temperature": 0.9,
-                "num_ctx": 16384, #12288 #2048 or 4096 for faster responses. 12288 works but is slow.
-                "num_thread": 2 # 🧵 Restricts Ollama to exactly 3 CPU threads
+                "temperature": TEMPERATURE,
+                "num_ctx": NUM_CTX,
+                "num_thread": NUM_THREAD
             }
         )
         
-        # Convert response_stream iterator into an explicit reference we can advance manually
         stream_iterator = iter(response_stream)
         
         try:
-            # 1. Pull the absolute FIRST token while STILL INSIDE the 'with loader' context block.
-            # This causes Python to block here while the spinner continues to animate.
             first_chunk = next(stream_iterator)
+            first_token_time = time.perf_counter() - start_call  # ⏱️ Catch Time To First Token!
             first_token = first_chunk['message']['content']
             full_text += first_token
         except StopIteration:
-            # Handle rare immediate empty streams gracefully
             first_token = ""
 
-    # The context manager exits naturally here, killing the background thread
-    # and sweeping the loader line clean before printing anything to the player.
-
-    # 2. Process that first chunk now that the screen is clean
     if first_token:
         if '"narrative":' in full_text:
             idx = full_text.find('"narrative":') + 12
@@ -147,11 +135,10 @@ def get_llm_turn_and_stream(player_action):
             if idx < len(full_text) and full_text[idx] == '"':
                 inside_narrative = True
                 remainder = full_text[idx+1:]
-                sys.stdout.write(remainder)
-                sys.stdout.flush()
-            narrative_buffer = full_text
+                # (Keep remainder buffering strategy identical)
+                narrative_buffer = full_text
 
-    # 3. Stream all subsequent tokens normally
+    stream_buffer = ""
     for chunk in stream_iterator:
         token = chunk['message']['content']
         full_text += token
@@ -164,32 +151,64 @@ def get_llm_turn_and_stream(player_action):
                 if idx < len(full_text) and full_text[idx] == '"':
                     inside_narrative = True
                     remainder = full_text[idx+1:]
-                    sys.stdout.write(remainder)
+                    for c in remainder:
+                        if c == '"': inside_narrative = False; break
+                        stream_buffer += c
+                        if "[BREAK]" in stream_buffer:
+                            sys.stdout.write("\n\n")
+                            stream_buffer = ""
+                        elif not "[BREAK]".startswith(stream_buffer):
+                            sys.stdout.write(stream_buffer)
+                            stream_buffer = ""
                     sys.stdout.flush()
                 narrative_buffer = full_text
         else:
             for char in token:
                 if escaped:
-                    sys.stdout.write(char)
-                    sys.stdout.flush()
+                    stream_buffer += char
                     escaped = False
                 elif char == '\\':
-                    sys.stdout.write(char)
-                    sys.stdout.flush()
                     escaped = True
+                    continue
                 elif char == '"':
                     inside_narrative = False
                     break
                 else:
-                    sys.stdout.write(char)
+                    stream_buffer += char
+                
+                if "[BREAK]" in stream_buffer:
+                    sys.stdout.write("\n\n")
                     sys.stdout.flush()
+                    stream_buffer = ""
+                elif stream_buffer and not "[BREAK]".startswith(stream_buffer):
+                    sys.stdout.write(stream_buffer)
+                    sys.stdout.flush()
+                    stream_buffer = ""
+
+    if stream_buffer:
+        sys.stdout.write(stream_buffer)
+        sys.stdout.flush()
                         
+    total_generation_time = time.perf_counter() - start_call  # ⏱️ Catch Total Operational Duration
     print("\n----------------------------------------")
-    return json.loads(full_text)
+    
+    final_data = json.loads(full_text)
+    
+    # 📝 Log the calculated statistics down into our log tracking class
+    logger.log_turn(
+        player_input=player_action,
+        system_prompt=system_prompt,
+        output_text=final_data.get("narrative", ""),
+        time_to_first_token=first_token_time,
+        total_generation_time=total_generation_time
+    )
 
+    if "narrative" in final_data:
+        final_data["narrative"] = final_data["narrative"].replace("[BREAK]", "\n\n")
+    return final_data
 
-# --- MAIN GAME LOOP ---
-preload_model("phi4-mini")
+# --- MAIN GAME LOOP RUNNER ---
+preload_model()
 
 print(f"=== Welcome to the AI RPG, {game_state['player_name']}! ===")
 print(f"You begin your journey in: {game_state['current_location']}\n")
@@ -202,10 +221,9 @@ while game_state["hp"] > 0:
     try:
         result = get_llm_turn_and_stream(action)
         
-        # Update Python state based on LLM decision
+        # State tracking updates
         game_state["hp"] += result.get("hp_modifier", 0)
         game_state["gold"] += result.get("gold_modifier", 0)
-        
         if result.get("item_discovered"):
             game_state["inventory"].append(result["item_discovered"])
         if result.get("item_lost") in game_state["inventory"]:
@@ -213,7 +231,6 @@ while game_state["hp"] > 0:
         if result.get("new_location"):
             game_state["current_location"] = result["new_location"]
             
-        # Present modern stats block back to the user
         print(f"❤️ HP: {game_state['hp']} | 💰 Gold: {game_state['gold']} | 📍 Location: {game_state['current_location']}")
         print(f"🎒 Inventory: {', '.join(game_state['inventory'])}")
         
