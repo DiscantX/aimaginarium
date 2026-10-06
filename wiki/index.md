@@ -31,6 +31,7 @@ Tabletop GM craft was covered in discussion and recorded in the action pipeline,
 ## Tech
 
 - [Tech stack (draft)](tech/tech-stack.md)
+- [LLM gateway](tech/llm-gateway.md)
 - [Evaluation and replay](tech/evaluation-and-replay.md)
 
 ## Tracking
