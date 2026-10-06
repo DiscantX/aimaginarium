@@ -14,3 +14,4 @@ logs/
 # Built rules database
 data/srd.sqlite
 .pytest_cache/
+*.egg-info/

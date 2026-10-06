@@ -41,3 +41,13 @@ Added later in discussion **[Proposed]**: the promise ledger and quest entries (
 - **[Proposed]** Replayability: the event log plus recorded dice allow a scenario to be replayed under different directors, which is how models are compared.
 - **[Proposed]** Free-form mode loosens validation instead of bypassing it, so the event log stays complete in every mode.
 - **[Decided]** Free-form and system-agnostic rulesets are first-class goals, so the unified ruleset interface must not assume dice or a numeric difficulty (see the tier translation in the action pipeline).
+
+## State store (prototype)
+
+Implemented in `aimaginarium/world/` (issue #14).
+
+- **[Decided]** The world lives in its own database, separate from the read-only SRD. Every write goes through one `commit()` that appends events to an immutable log and updates the state tables in the same transaction. A replay check rebuilds state from the log and compares.
+- **[Decided]** Everything is an entity with a parent: a location contains characters and items, a character contains items. This gives both "where is X" and inventory. The store is generic; the 5e sheet is JSON that the ruleset layer validates.
+- **[Decided]** Facts about a thing ("established") work on every entity kind and are never silently edited; a fact that stops being true is superseded.
+- **[Decided]** Knowledge belongs to characters (PCs and NPCs alike), not players. A fact is public by default or restricted; for restricted facts each learning is a `fact.revealed` event, indexed in a table so many unrelated characters can know the same secret. Groups may also be knowers. The store holds ground truth and never filters; projections come later.
+- **[Proposed]** Details chosen in implementation: readable sequential ids (`char-1`, `item-7`, `loc-2`); facts stored in their own table and presented as `established`; removal is soft and refuses while an entity still contains others; `@name` refs let one commit refer to things it creates; the change types are create, update, move, remove, establish, supersede, reveal, connect, disconnect and a log-only record.
