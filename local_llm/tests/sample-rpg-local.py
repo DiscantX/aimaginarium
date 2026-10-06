@@ -8,8 +8,12 @@ from rpg_logger import RPGLogger  # 📥 Import your modular logger
 MODEL_NAME = "phi4-mini"
 NUM_CTX = 12288
 TEMPERATURE = 0.85
-NUM_THREAD = 4
+NUM_THREAD = 2
 VERBOSE_LOGGING = True  # Toggle this to False if you want to skip dialogue tracking
+MAX_HISTORY_MESSAGES = 20  # Configurable maximum number of historical messages (user/assistant turns) to include
+
+# Conversation history tracking
+conversation_history = []
 
 # 1. Initialize your state and the tracking module
 game_state = {
@@ -102,12 +106,12 @@ def get_llm_turn_and_stream(player_action):
     first_token_time = 0.0
 
     with loader:
+        history_subset = conversation_history[-MAX_HISTORY_MESSAGES:] if MAX_HISTORY_MESSAGES > 0 else []
+        messages_payload = [{"role": "system", "content": system_prompt}] + history_subset + [{"role": "user", "content": f"The player attempts to: {player_action}"}]
+        
         response_stream = ollama.chat(
             model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"The player attempts to: {player_action}"}
-            ],
+            messages=messages_payload,
             format="json", 
             stream=True,
             options={
@@ -205,6 +209,11 @@ def get_llm_turn_and_stream(player_action):
 
     if "narrative" in final_data:
         final_data["narrative"] = final_data["narrative"].replace("[BREAK]", "\n\n")
+
+    # Append to conversation history
+    conversation_history.append({"role": "user", "content": f"The player attempts to: {player_action}"})
+    conversation_history.append({"role": "assistant", "content": full_text})
+
     return final_data
 
 # --- MAIN GAME LOOP RUNNER ---
