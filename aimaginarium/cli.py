@@ -19,7 +19,8 @@ from typing import Awaitable, Callable, Optional, Sequence
 from dotenv import load_dotenv
 
 from .engine import (
-    ChangesRejected, CheckCalled, Game, Narration, PLAYER_ID, ReplyUnreadable, create_demo_world, render_state,
+    ChangesRejected, CheckCalled, Game, Narration, PLAYER_ID, Repairing, ReplyUnreadable, create_demo_world,
+    render_state,
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
@@ -92,6 +93,9 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
                 await ask(f"\n[{event.roll.skill.title()} check, difficulty {event.roll.difficulty}] Press Enter to roll... ")
                 roll = event.roll
                 out(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n")
+                spinner.start()
+                first = True
+            elif isinstance(event, Repairing):
                 spinner.start()
                 first = True
             elif isinstance(event, ChangesRejected):

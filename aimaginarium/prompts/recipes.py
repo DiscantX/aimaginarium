@@ -15,6 +15,7 @@ A recipe file (TOML)::
     [variants.terse]            # replaces any of system, state and plan
     system = ["core/role", "style/terse"]
 
+A recipe without ``[[plan]]`` has no narration (for example a repair of state changes).
 Fragment ids may hold placeholders (``outcome/{classification}``), filled from
 the state values when the prompt is built.
 """
@@ -44,12 +45,12 @@ class Layout:
     Attributes:
         system: Ids of the stable fragments.
         state: Ids of the volatile fragments.
-        plan: The narration plan.
+        plan: The narration plan, or None for a reply that has no narration.
     """
 
     system: tuple[str, ...]
     state: tuple[str, ...]
-    plan: NarrationPlan
+    plan: Optional[NarrationPlan]
 
 
 @dataclass(frozen=True)
@@ -100,8 +101,8 @@ def _layout(raw: Mapping[str, Any], base: Optional[Layout] = None) -> Layout:
     system = tuple(raw["system"]) if "system" in raw else getattr(base, "system", None)
     state = tuple(raw["state"]) if "state" in raw else getattr(base, "state", ())
     plan = _plan(raw["plan"]) if "plan" in raw else getattr(base, "plan", None)
-    if system is None or plan is None:
-        raise PromptError("a recipe needs 'system' and a 'plan'")
+    if system is None:
+        raise PromptError("a recipe needs 'system'")
     return Layout(system, state, plan)
 
 

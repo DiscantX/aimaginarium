@@ -32,7 +32,7 @@ class Prompt:
         variant: Variant used.
         system: The stable system prompt, including the narration plan.
         state: The volatile text that goes before the player's input.
-        plan: The narration plan.
+        plan: The narration plan, or None if the reply has no narration.
         fragments: Fragment id to the hash of its text.
     """
 
@@ -41,7 +41,7 @@ class Prompt:
     variant: str
     system: str
     state: str
-    plan: NarrationPlan
+    plan: Optional[NarrationPlan]
     fragments: Mapping[str, str]
 
     def request(
@@ -56,7 +56,7 @@ class Prompt:
         Args:
             history: Earlier turns, oldest first.
             user_text: What the player did or said this turn.
-            schema: Base model for the reply; the plan's narration is put first.
+            schema: The reply model, or the base model whose fields follow the plan's narration.
             **options: Passed to :class:`Request` (``model``, ``temperature``).
 
         Returns:
@@ -66,7 +66,7 @@ class Prompt:
         return Request(
             system=self.system,
             messages=(*history, Message("user", last)),
-            schema=self.plan.reply_model(schema),
+            schema=self.plan.reply_model(schema) if self.plan else schema,
             **options,
         )
 
@@ -152,5 +152,5 @@ class PromptBuilder:
                 parts.append(fragment.render(values))
             return parts
 
-        system = "\n\n".join([*render(layout.system, static), layout.plan.describe()])
+        system = "\n\n".join([*render(layout.system, static), *([layout.plan.describe()] if layout.plan else [])])
         return Prompt(recipe.id, recipe.task, name, system, "\n\n".join(render(layout.state, state)), layout.plan, used)
