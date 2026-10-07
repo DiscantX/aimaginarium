@@ -27,6 +27,8 @@ Tabletop GM craft was covered in discussion and recorded in the action pipeline,
 - [Action pipeline](architecture/action-pipeline.md)
 - [World time and the knowledge layer](architecture/time-and-knowledge.md)
 - [Multiplayer, server-client and the internal API](architecture/multiplayer-and-api.md)
+- [Dev tools and clients](architecture/dev-tools-and-clients.md): build order, roles, trace channel, undo and replay, panels, MCP
+- [Entity highlighting](architecture/entity-highlighting.md): what colored words mean, mentions, names and labels
 
 ## Tech
 
