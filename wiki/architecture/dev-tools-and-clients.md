@@ -6,7 +6,7 @@
 
 **[Decided]** Two near-term goals, both to speed up troubleshooting and live testing of the engine: (a) a Textual interface with dev panels, and (b) an LLM-as-player MCP server so Claude can play the game and test it.
 
-**[Decided]** Both are clients of the internal API, which is not built yet (the terminal client uses the temporary `Game` facade). Build order: **1. internal API, 2. Textual UI, 3. player MCP.**
+**[Decided]** Both are clients of the internal API (contract in #56, in-process server and terminal client in #57). Build order: **1. internal API, 2. Textual UI, 3. player MCP.**
 
 **[Decided]** Dev tools need not ship in production, or ship disabled.
 
@@ -32,6 +32,17 @@
 - highlight mentions that were dropped or flagged (see [entity-highlighting.md](entity-highlighting.md)).
 
 This replaces the dev-tools item previously in [../open-questions.md](../open-questions.md).
+
+### The contract (built in #56, `aimaginarium/api/`)
+
+**[Decided]** A check pauses the turn through **one path only**: an explicit `Roll` command. `send(SubmitAction)` streams the turn up to `CheckCalled` and ends with `Done(awaiting_roll=True)`; `send(Roll)` continues it with `RollResult`, the outcome narration and the commit. Built in #57: the engine's turn ends at `CheckCalled` and `Game.resolve_check()` continues it, so remote and in-process clients behave alike.
+
+**[Proposed]** The rest of the shape:
+
+- **Commands.** Player path: `OpenScene`, `SubmitAction(text)`, `Roll`. System path: `GetPlayerView`, `Quit`, and dev-only `Undo`, `GetState(perspective)`, `GetTrace(since, limit)`. There are no in-game verbs.
+- **Events.** Every reply stream ends with `Done`. The terminal's turn events carry over (`Narration`, `CheckCalled`, `Repairing`, `ChangesRejected`, `ReplyUnreadable`); `Committed` becomes `StateChanged`, and `RollResult`, `CommandRejected`, `StateView`, `TurnRetracted` and the dev-only `TraceEvent` are new. Each is wrapped in an `Envelope` with a sequence number and turn id.
+- **Roles are enforced in one place.** Each event class lists the roles that may see it, and fields only the dev role may see are marked `dev_only`; `for_role` strips them. Dev-only today: the GM's `reason` and the difficulty workings on `CheckCalled`, the raw errors on `ChangesRejected`, the raw changes on `StateChanged`, and the GM state view.
+- **Protocols.** `Server.connect(role)` returns a `Session` with `send`, `subscribe` and `close`. Asking for the dev role while config disables it raises `RoleError`.
 
 ## Undo, replay and snapshots
 
