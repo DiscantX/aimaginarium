@@ -4,6 +4,9 @@ storage/
 .qdrant-initialized
 snapshots/
 
+# Secrets (API keys): never commit
+.env
+
 # Python
 .venv/
 *.pyc

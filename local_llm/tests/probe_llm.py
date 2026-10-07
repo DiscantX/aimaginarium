@@ -1,7 +1,7 @@
 """Live probe for the open provider questions.
 
 Run: python local_llm/tests/probe_llm.py ollama [model]
-     GEMINI_API_KEY=... python local_llm/tests/probe_llm.py gemini <model>
+     python local_llm/tests/probe_llm.py gemini <model>   (key in .env or the environment)
 
 Checks (1) whether a full JSON schema, with a nested model and a free-form dict,
 is accepted; (2) whether paragraph breaks appear when the narration is one string versus a
@@ -12,6 +12,7 @@ import asyncio
 import sys
 from typing import Any
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from aimaginarium.llm import Message, NarrationExtractor, Request, StructuredCaller
@@ -79,4 +80,5 @@ async def main(provider: str, model: str) -> None:
         await llm.aclose()
 
 
+load_dotenv()  # reads GEMINI_API_KEY from a .env file in the working directory
 asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "phi4-mini"))
