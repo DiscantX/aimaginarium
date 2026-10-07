@@ -1,6 +1,6 @@
 import os
 import pytest
-from local_llm.tests.rpg_logger import RPGLogger
+from local_llm.sample.rpg_logger import RPGLogger
 
 def test_rpg_logger_actual_tokens(tmp_path):
     log_dir = tmp_path / "logs"
