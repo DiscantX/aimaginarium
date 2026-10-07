@@ -80,5 +80,5 @@ async def main(provider: str, model: str) -> None:
         await llm.aclose()
 
 
-load_dotenv()  # reads GEMINI_API_KEY from a .env file in the working directory
+load_dotenv()  # finds a .env file in this folder or any parent (the repo root)
 asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "phi4-mini"))
