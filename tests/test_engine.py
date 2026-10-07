@@ -161,3 +161,13 @@ def test_scene_view_shows_ids_exits_inventory_and_secrets(store):
     assert "Market Square [loc-2] via front door" in state["world_state"]
     assert "Shortsword [item-1]" in state["character"] and "athletics +3" in state["character"]
     assert ".." not in state["world_state"]
+
+
+def test_restored_history_matches_the_live_history_including_check_turns(store):
+    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+    live, _ = make_game(store, [reply(["You creep."], check=check), reply(["You slip past."]), reply(["Marta nods."])])
+    play(live.take_turn(PLAYER_ID, "I sneak."))
+    play(live.take_turn(PLAYER_ID, "I greet Marta."))
+    restored, _ = make_game(store, [])
+    assert restored._history == live._history
+    assert restored._history[1].content == "You creep.\n\nYou slip past."

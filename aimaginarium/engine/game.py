@@ -122,7 +122,8 @@ class Game:
             if ev.kind == "player.action":
                 turns.setdefault(ev.turn_id, {})["player"] = ev.payload.get("text", "")
             elif ev.kind == "llm.call" and "narration" in ev.payload:
-                turns.setdefault(ev.turn_id, {})["narration"] = ev.payload.get("narration", "")
+                turn = turns.setdefault(ev.turn_id, {})
+                turn["narration"] = "\n\n".join(filter(None, [turn.get("narration"), ev.payload["narration"]]))
 
         history: list[Message] = []
         for turn_id in sorted(turns.keys()):
