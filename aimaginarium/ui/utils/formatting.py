@@ -6,6 +6,8 @@ import shutil
 import textwrap
 from typing import Optional
 
+from .colors import colorize
+
 
 def format_assistant_message(text: str, width: Optional[int] = None) -> str:
     """Formats an assistant narration message with '↳ ' indicator, block indentation, and trailing blank line.
@@ -26,15 +28,24 @@ def format_assistant_message(text: str, width: Optional[int] = None) -> str:
         para_clean = para.strip()
         if not para_clean:
             continue
-        initial = "↳ " if i == 0 else "  "
         wrapped = textwrap.fill(
             para_clean,
             width=term_width,
-            initial_indent=initial,
+            initial_indent="",
             subsequent_indent="  ",
             break_long_words=False,
         )
-        formatted_paragraphs.append(wrapped)
+        styled_body = colorize(wrapped, "narration")
+        lines = styled_body.splitlines()
+
+        if i == 0:
+            ind = colorize("↳ ", "indicator")
+            if lines:
+                lines[0] = ind + lines[0]
+        else:
+            lines = ["  " + line for line in lines]
+
+        formatted_paragraphs.append("\n".join(lines))
 
     body = "\n\n".join(formatted_paragraphs)
     return f"{body}\n\n"
