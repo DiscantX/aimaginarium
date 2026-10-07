@@ -22,13 +22,27 @@ options = { num_thread = 2 }
 schema_enforcement = true
 reports_cache = true
 
-# Each task picks a provider and, optionally, a model. Unknown tasks use "default".
+# A task is a named kind of LLM call. Each picks a provider and, optionally, a model,
+# then fallbacks tried in order if it is unavailable ("provider" or "provider:model").
+# Tasks not listed use "default". Tasks the engine uses:
+#   narrate        every turn's first call (prose, state changes, and any check request)
+#   check_outcome  second call of a check turn, after the roll
+#   opening        first turn of a session
+#   repair         re-asks for rejected state changes only
+#   world_tick     faction and world events (no player waiting; needs strong reasoning)
+#   summarize      history compression, established facts
+#   player         the LLM-driven test player
 [tasks.default]
 provider = "gemini"
-
-[tasks.check]
-provider = "local"
 
 [tasks.narrate]
 provider = "gemini"
 # model = "gemini-3.5-flash"
+fallback = ["local"]
+
+[tasks.summarize]
+provider = "local"
+
+# A provider that was unavailable is skipped for this many seconds.
+[fallback]
+cooldown = 60

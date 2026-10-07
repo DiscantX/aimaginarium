@@ -33,7 +33,7 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 **[Proposed]** This maps onto function calling (`request_check` tool call, engine pauses, tool result carries the roll and its classification). Call 2 reuses most of call 1's context, so provider-side caching may make it cheaper; verify for Gemini. The dice animation and streaming the setup narration hide latency. An "outcome bands" variant (one call returning narration for each band) remains a fallback where the game cannot pause.
 
-**[Decided]** Different models can serve different tasks, configurable at the server level (for example a smaller model for the check ruling in call 1).
+**[Decided]** Different models can serve different tasks, configurable at the server level (for example a cheap model for summaries and a strong one for world ticks). Call 1 is the `narrate` task and carries any check request, so the check ruling uses the narration model; there is no separate check task. Call 2 is `check_outcome`. See [../tech/llm-gateway.md](../tech/llm-gateway.md) for tasks and fallback.
 
 ## Difficulty numbers
 

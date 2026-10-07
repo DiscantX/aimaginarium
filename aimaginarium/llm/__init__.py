@@ -5,13 +5,14 @@ from .base import (
     Response, RetryableError, StreamEvent, Usage,
 )
 from .config import factory_from_file, find_config, load_config
-from .factory import ConfigError, ProviderFactory, Route
+from .factory import ConfigError, ProviderFactory
 from .narration import NarrationExtractor, narration_events
 from .retry import RetryNotice, RetryPolicy, RetryingProvider
+from .route import Candidate, Cooldown, FallbackNotice, Route
 from .structured import StructuredCaller, StructuredOutputError
 
 __all__ = [
-    "Capabilities", "Chunk", "ConfigError", "LLMProvider", "Message", "NarrationExtractor", "ProviderError",
+    "Candidate", "Capabilities", "Chunk", "ConfigError", "Cooldown", "FallbackNotice", "LLMProvider", "Message", "NarrationExtractor", "ProviderError",
     "ProviderFactory", "ProviderUnavailableError", "Request", "Response", "RetryNotice", "RetryPolicy",
     "RetryableError", "RetryingProvider", "Route", "StreamEvent", "StructuredCaller", "StructuredOutputError",
     "Usage", "factory_from_file", "find_config", "load_config", "narration_events",
