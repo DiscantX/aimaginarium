@@ -18,6 +18,13 @@ class FixedDice:
         return self.die
 
 
+def stealth_check(reason="x"):
+    """A check request that works out to difficulty 12 (easy 10, plus two small hindrances)."""
+    return {"skill": "stealth", "tier": "easy", "reason": reason,
+            "factors": [{"what": "creaking floor", "effect": "harder", "size": "small"},
+                        {"what": "dim light", "effect": "harder", "size": "small"}]}
+
+
 def reply(narration, changes=(), check=None):
     return json.dumps({"narration": list(narration), "check": check, "changes": list(changes)})
 

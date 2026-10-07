@@ -37,12 +37,15 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 ## Difficulty numbers
 
-**[Open]** Ficus asked how the target number is decided and how to avoid the same number per tier. **[Proposed]** answer:
+**[Decided]** Ficus asked how the target number is decided and how to avoid the same number per tier. The answer:
 
 - The LLM does not output a raw number (models anchor on familiar values, and a number means nothing outside its ruleset).
 - It outputs a **tier**, defined in the fiction, plus a short list of **difficulty factors** (direction and size: rain-slick, no tools, guards nearby).
 - **The ruleset translates** into its own mechanic: a 5e DC, a band, a number of successes. Code applies the factors to the tier's base, giving varied, explainable numbers.
-- Factors double as the **dependencies** of the precedent log. Whether the target is shown to the player before rolling is a setting.
+- Factors double as the **dependencies** of the precedent log.
+- **[Decided]** The player sees the number before rolling.
+- **[Built]** In `D20Rules.rule()`: tiers very_easy 5, easy 10, medium 15, hard 20, very_hard 25, nearly_impossible 30 (the 5e DC ladder); factors small 1, medium 2, large 4, harder adding and easier subtracting; the total adjustment is limited to +-6; the result stays in 1..40. The breakdown (`base`, `adjustments`, `difficulty`) is stored in the `check.requested` event next to the model's `tier` and `factors`. Unknown tier, size or effect words from a weaker model are normalised (medium, small, harder) instead of failing the turn.
+- **[Open]** Where the tier and factors are decided. Today the narrator decides them in call 1, together with the setup narration. Call 2 cannot, because it happens after the roll and the ruling must be committed before it. A separate, focused call between call 1 and the roll is possible at the cost of a third call on check turns.
 
 ## Precedent log
 
@@ -60,7 +63,7 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 `aimaginarium/engine/game.py` holds `Game`, a **temporary** in-process facade (`open_scene()`, `take_turn(actor, text)`), and `aimaginarium/cli.py` is the terminal client. Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
 
-A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The check prompt shows the difficulty (`[Stealth check, difficulty 12]`), the number the total must meet; the roll shown afterwards is die, modifier and total. **[Decided]** The player sees the difficulty. A natural 1 or 20 is critical whatever the total. **Departure from the design:** the prototype lets the model emit the difficulty number directly (guided by easy 8 / ordinary 12 / hard 16 / very hard 20 in `core/checks`), which invites the number anchoring described above; the tier-plus-factors translation is not built yet.
+A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The check prompt shows the difficulty (`[Stealth check, difficulty 12]`), the number the total must meet; the roll shown afterwards is die, modifier and total. **[Decided]** The player sees the difficulty. A natural 1 or 20 is critical whatever the total.
 
 1. The player's input is logged (`player.action`, actor = the character).
 2. Call 1 (`narrate`) streams narration. The reply is lenient to parse: JSON that does not match the plan's paragraph count still works, because the plan is enforced by the provider's schema rather than by the engine. The call is logged (`llm.call`: recipe, variant, fragment hashes, model, usage including time to first token and cached tokens).

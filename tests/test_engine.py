@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from engine_helpers import FixedDice, make_game, reply
+from engine_helpers import FixedDice, make_game, reply, stealth_check
 from aimaginarium.engine import (
     ChangesRejected, CheckCalled, Committed, D20Rules, Game, Narration, PLAYER_ID, ReplyUnreadable, create_demo_world,
     render_state,
@@ -56,7 +56,7 @@ def test_request_has_stable_system_and_state_last(store):
 
 
 def test_check_turn_commits_the_request_before_the_roll_and_uses_two_calls(store):
-    check = {"skill": "stealth", "difficulty": 12, "reason": "The guard may notice."}
+    check = stealth_check("The guard may notice.")
     game, provider = make_game(
         store,
         [reply(["You creep forward."], check=check),
@@ -76,6 +76,11 @@ def test_check_turn_commits_the_request_before_the_roll_and_uses_two_calls(store
     events = asyncio.run(run())
     called = next(e for e in events if isinstance(e, CheckCalled))
     assert (called.roll.die, called.roll.modifier, called.roll.total, called.roll.classification) == (14, 1, 15, "success")
+    assert (called.ruling.tier, called.ruling.base, called.ruling.difficulty) == ("easy", 10, 12)
+    requested = store.events(kind="check.requested")[0].payload
+    assert requested["tier"] == "easy" and requested["difficulty"] == 12 and requested["base"] == 10
+    assert requested["adjustments"] == [{"what": "creaking floor", "delta": 1}, {"what": "dim light", "delta": 1}]
+    assert requested["factors"][0] == {"what": "creaking floor", "effect": "harder", "size": "small"}
     assert "".join(e.text for e in events if isinstance(e, Narration)) == "You creep forward.You slip past."
     assert kinds(store, turn=1) == ["player.action", "llm.call", "check.requested", "roll", "llm.call", "entity.updated"]
     assert store.get_entity(PLAYER_ID).data["sheet"]["sneaked"] is True
@@ -88,7 +93,7 @@ def test_check_turn_commits_the_request_before_the_roll_and_uses_two_calls(store
 
 
 def test_critical_failure_selects_its_own_instruction(store):
-    check = {"skill": "athletics", "difficulty": 10, "reason": "The wall is slick."}
+    check = {"skill": "athletics", "tier": "easy", "reason": "The wall is slick."}
     game, provider = make_game(store, [reply(["You jump."], check=check), reply(["You fall."])], die=1)
     play(game.take_turn(PLAYER_ID, "I leap the wall."))
     assert "critical failure" in provider.requests[1].messages[-1].content
@@ -130,7 +135,7 @@ def test_an_empty_or_failed_repair_reports_the_original_rejection(store):
 
 
 def test_repair_after_a_check_commits_with_the_roll_as_cause(store):
-    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+    check = {"skill": "stealth", "tier": "medium", "reason": "x"}
     game, _ = make_game(store, [reply(["You creep."], check=check), reply(["You take it."], BAD), repair(GOOD)])
     play(game.take_turn(PLAYER_ID, "I sneak to the key."))
     moved = store.events(kind="entity.moved")[-1]
@@ -199,10 +204,56 @@ def test_scene_view_shows_ids_exits_inventory_and_secrets(store):
 
 
 def test_restored_history_matches_the_live_history_including_check_turns(store):
-    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+    check = {"skill": "stealth", "tier": "medium", "reason": "x"}
     live, _ = make_game(store, [reply(["You creep."], check=check), reply(["You slip past."]), reply(["Marta nods."])])
     play(live.take_turn(PLAYER_ID, "I sneak."))
     play(live.take_turn(PLAYER_ID, "I greet Marta."))
     restored, _ = make_game(store, [])
     assert restored._history == live._history
     assert restored._history[1].content == "You creep.\n\nYou slip past."
+
+
+def test_check_without_a_number_reaches_the_outcome_prompt_with_the_tier(store):
+    game, provider = make_game(store, [reply(["You creep."], check=stealth_check()), reply(["You slip past."])])
+    play(game.take_turn(PLAYER_ID, "I sneak."))
+    state = provider.requests[1].messages[-1].content
+    assert "difficulty 12" in state and "judged easy" in state
+    assert "Never give a number" in provider.requests[0].system
+
+
+def rule(tier, *factors):
+    from aimaginarium.engine import CheckRequest
+    return D20Rules().rule(CheckRequest(skill="x", tier=tier, factors=[
+        {"what": w, "effect": e, "size": z} for w, e, z in factors]))
+
+
+def test_tier_gives_the_base_and_factors_move_it():
+    assert rule("medium").difficulty == 15
+    assert rule("hard", ("rain", "harder", "medium"), ("ally", "easier", "small")).difficulty == 21
+    assert rule("hard", ("rain", "harder", "medium"), ("ally", "easier", "small")).adjustments == (("rain", 2), ("ally", -1))
+    assert [rule(t).difficulty for t in ("very_easy", "easy", "medium", "hard", "very_hard", "nearly_impossible")] == [5, 10, 15, 20, 25, 30]
+
+
+def test_adjustment_is_limited_and_difficulty_stays_in_range():
+    ruling = rule("hard", *[(f"c{i}", "harder", "large") for i in range(4)])
+    assert (ruling.adjustment, ruling.difficulty) == (6, 26) and sum(d for _, d in ruling.adjustments) == 16
+    assert rule("very_easy", ("a", "easier", "large"), ("b", "easier", "large")).difficulty == 1
+    assert rule("nearly_impossible", ("a", "harder", "large"), ("b", "harder", "large")).difficulty == 36
+
+
+def test_unknown_words_from_weaker_models_are_normalised():
+    from aimaginarium.engine import CheckRequest
+    check = CheckRequest.model_validate({"skill": "x", "tier": "Very Hard", "factors": [
+        {"what": "a", "effect": "HARDER", "size": "huge"}, {"what": "b", "effect": "helps", "size": "Large"}]})
+    assert check.tier == "very_hard" and check.factors[0].size == "small" and check.factors[1].effect == "harder"
+    assert CheckRequest.model_validate({"skill": "x", "tier": "moderate"}).tier == "medium"
+
+
+def test_tier_table_matches_the_schema_and_the_schema_lists_the_choices():
+    from typing import get_args
+    from aimaginarium.engine import CheckRequest
+    from aimaginarium.engine.replies import Size, Tier
+    from aimaginarium.engine.rules import SIZES, TIERS
+    assert set(TIERS) == set(get_args(Tier)) and set(SIZES) == set(get_args(Size))
+    schema = CheckRequest.model_json_schema()
+    assert set(schema["properties"]["tier"]["enum"]) == set(TIERS) and "difficulty" not in schema["properties"]

@@ -27,7 +27,7 @@ from ..llm.structured import strip_fences
 from ..prompts import Prompt, PromptBuilder
 from ..world import ChangeError, CommitError, Event, Record, WorldStore
 from .replies import CheckRequest, OutcomeReply, RepairReply, TurnReply
-from .rules import D20Rules, Roll
+from .rules import D20Rules, Roll, Ruling
 from .view import render_state
 
 GM = "gm"
@@ -46,13 +46,17 @@ class CheckCalled:
     """A dice check was called for; the client lets the player roll, then resumes.
 
     Attributes:
-        roll: The precomputed roll. The client shows ``die``, ``modifier`` and
-            ``total`` when the player presses the button, and never the difficulty.
+        roll: The precomputed roll. The client shows the difficulty with the
+            prompt, then ``die``, ``modifier`` and ``total`` when the player
+            presses the button.
         reason: Why the check matters.
+        ruling: How the difficulty was worked out (tier and factors), for
+            clients that show their workings, such as a developer panel.
     """
 
     roll: Roll
     reason: str
+    ruling: Ruling
 
 
 @dataclass(frozen=True)
@@ -194,12 +198,14 @@ class Game:
             self._remember(text, first.narration)
             return
 
-        requested = self._record("check.requested", GM, turn, check.model_dump(), [action.seq], [actor])
-        roll = self.rules.roll(self.store.get_entity(actor), check.skill, check.difficulty)
-        yield CheckCalled(roll, check.reason)
+        ruling = self.rules.rule(check)
+        requested = self._record("check.requested", GM, turn, {**check.model_dump(), **ruling.as_payload()},
+                                 [action.seq], [actor])
+        roll = self.rules.roll(self.store.get_entity(actor), check.skill, ruling.difficulty)
+        yield CheckCalled(roll, check.reason, ruling)
         rolled = self._record("roll", actor, turn, asdict(roll), [requested.seq], [actor])
 
-        outcome = self.prompts.build("check_outcome", state={**state, **self._roll_state(roll)})
+        outcome = self.prompts.build("check_outcome", state={**state, **self._roll_state(roll, check)})
         followup = outcome.request(
             [*request.messages, Message("assistant", first.narration)], schema=OutcomeReply
         )
@@ -315,10 +321,10 @@ class Game:
     # -- conversation ------------------------------------------------------
 
     @staticmethod
-    def _roll_state(roll: Roll) -> dict[str, Any]:
+    def _roll_state(roll: Roll, check: CheckRequest) -> dict[str, Any]:
         """Values for the state fragments of the outcome prompt."""
         return {"roll": roll.die, "skill": roll.skill, "difficulty": roll.difficulty, "margin": roll.margin,
-                "classification": roll.classification}
+                "classification": roll.classification, "tier": check.tier.replace("_", " ")}
 
     def _recent(self) -> list[Message]:
         """Returns the most recent history, starting on a player message."""

@@ -86,7 +86,7 @@ def build_request(builder: PromptBuilder, store: WorldStore, scenario: str, vari
     if scenario == "check_outcome":
         roll = D20Rules(random.Random(0)).roll(store.get_entity(PLAYER_ID), "stealth", 12)
         values = {"roll": roll.die, "skill": roll.skill, "difficulty": roll.difficulty, "margin": roll.margin,
-                  "classification": "failure"}
+                  "classification": "failure", "tier": "easy"}
         prompt = builder.build("check_outcome", state={**state, **values}, variant=variant)
         before = [("user", "I try to slip the key off its nail behind the bar while Marta's back is turned."),
                   ("assistant", "You wait until Marta bends to a cask, then reach over the bar for the key.")]

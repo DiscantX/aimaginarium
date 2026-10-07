@@ -212,7 +212,7 @@ def test_shipped_library_builds_every_recipe_and_variant(classification):
 
 def test_check_outcome_picks_the_instruction_for_the_classification():
     builder = PromptBuilder.from_directory(LIBRARY)
-    state = {"world_state": "w", "character": "c", "roll": 1, "skill": "Stealth", "difficulty": 12, "margin": -11}
+    state = {"world_state": "w", "character": "c", "roll": 1, "skill": "Stealth", "difficulty": 12, "margin": -11, "tier": "easy"}
     low = builder.build("check_outcome", state=state | {"classification": "critical_failure"})
     high = builder.build("check_outcome", state=state | {"classification": "critical_success"})
     assert "critical failure" in low.state and "critical success" in high.state
