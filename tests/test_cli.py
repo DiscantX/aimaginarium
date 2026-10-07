@@ -85,3 +85,13 @@ def test_conversation_history_persists_across_restart():
     assert game2._history[1].content == "Hello world."
     assert game2._history[2].content == "First action."
     assert game2._history[3].content == "Second response."
+
+
+def test_keyboard_interrupt_exits_cleanly():
+    async def ask(prompt):
+        raise KeyboardInterrupt
+
+    game = fresh_game([])
+    asked, text = [], []
+    asyncio.run(play(game, ask, lambda t, end="\n": text.append(t), opening=False))
+    assert True

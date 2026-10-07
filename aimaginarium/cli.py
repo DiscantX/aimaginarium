@@ -82,6 +82,15 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
     out()
 
 
+class GameQuit(Exception):
+    """Raised when the player quits the game."""
+
+
+def _is_quit_command(text: str) -> bool:
+    """Check if the text is a quit command."""
+    return text in ("/quit", "/exit")
+
+
 async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool = True) -> None:
     """Runs the game until the player quits.
 
@@ -92,25 +101,30 @@ async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool
         opening: Whether to narrate the opening scene first.
     """
     out(colorize("Type what you do. /state shows what the narrator sees, /quit leaves.\n", "muted"))
-    if opening:
-        await render_turn(game.open_scene(), ask, out)
-    else:
-        for msg in game._history:
-            if msg.role == "user":
-                out(format_player_message(msg.content), end="")
-            elif msg.role == "assistant":
-                out(format_assistant_message(msg.content), end="")
-    while True:
-        try:
-            text = (await ask(colorize("> ", "player"))).strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-        if text in ("/quit", "/exit"):
-            break
-        if text == "/state":
-            out("\n".join(render_state(game.store, game.player_id).values()) + "\n")
-        elif text:
-            await render_turn(game.take_turn(game.player_id, text), ask, out)
+    try:
+        if opening:
+            await render_turn(game.open_scene(), ask, out)
+        else:
+            for msg in game._history:
+                if msg.role == "user":
+                    out(format_player_message(msg.content), end="")
+                elif msg.role == "assistant":
+                    out(format_assistant_message(msg.content), end="")
+        while True:
+            try:
+                text = (await ask(colorize("> ", "player"))).strip()
+            except (EOFError, KeyboardInterrupt):
+                raise GameQuit()
+            if _is_quit_command(text):
+                raise GameQuit()
+            if text == "/state":
+                out("\n".join(render_state(game.store, game.player_id).values()) + "\n")
+            elif text:
+                await render_turn(game.take_turn(game.player_id, text), ask, out)
+    except GameQuit:
+        pass
+    except (EOFError, KeyboardInterrupt):
+        pass
 
 
 def _open_world(path: Path) -> tuple[WorldStore, str, bool]:
@@ -150,6 +164,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
+    except (EOFError, KeyboardInterrupt):
+        pass
     finally:
         store.close()
     return 0
