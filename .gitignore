@@ -18,3 +18,6 @@ logs/
 data/srd.sqlite
 .pytest_cache/
 *.egg-info/
+
+# Local configuration (copy aimaginarium.example.toml)
+aimaginarium.toml

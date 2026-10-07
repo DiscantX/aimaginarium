@@ -1,0 +1,34 @@
+# Copy to aimaginarium.toml (git-ignored) and edit. API keys stay in .env.
+
+# Retry policy for busy providers; override per provider with [providers.<name>.retry].
+[retry]
+attempts = 6
+base_delay = 1.0
+max_delay = 20.0
+max_total_wait = 45.0
+
+[providers.gemini]
+kind = "gemini"
+model = "gemini-3.5-flash-lite"
+# api_key_env = "GEMINI_API_KEY"
+
+[providers.local]
+kind = "ollama"
+model = "phi4-mini"
+options = { num_thread = 2 }
+
+# Per-model capability overrides (the shipped defaults are used otherwise).
+[providers.local.capabilities.phi4-mini]
+schema_enforcement = true
+reports_cache = true
+
+# Each task picks a provider and, optionally, a model. Unknown tasks use "default".
+[tasks.default]
+provider = "gemini"
+
+[tasks.check]
+provider = "local"
+
+[tasks.narrate]
+provider = "gemini"
+# model = "gemini-3.5-flash"
