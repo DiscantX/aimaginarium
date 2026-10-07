@@ -57,11 +57,11 @@ def test_request_body():
         return httpx.Response(200, content=ndjson(FINAL))
 
     request = Request(system="rules", messages=(Message("user", "hi"),), schema=Reply, temperature=0.5)
-    run_stream(provider(handler, num_ctx=4096), request)
+    run_stream(provider(handler, options={"num_ctx": 4096, "num_thread": 2}), request)
     assert seen["model"] == "phi4-mini" and seen["stream"] is True
     assert [m["role"] for m in seen["messages"]] == ["system", "user"]
     assert seen["format"] == Reply.model_json_schema()
-    assert seen["options"] == {"temperature": 0.5, "num_ctx": 4096}
+    assert seen["options"] == {"num_ctx": 4096, "num_thread": 2, "temperature": 0.5}
 
 
 def test_json_mode_when_schema_not_supported():

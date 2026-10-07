@@ -32,7 +32,7 @@ class ParagraphTurn(BaseModel):
 
 
 async def main(model: str) -> None:
-    ollama = OllamaProvider(model, num_ctx=8192)
+    ollama = OllamaProvider(model, options={"num_ctx": 8192, "num_thread": 2})
     user = Message("user", "I light a torch and step into the cave.")
 
     print("1. Full schema (nested model + dict field)")

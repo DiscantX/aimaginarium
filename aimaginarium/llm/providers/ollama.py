@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 
 import httpx
 
@@ -31,7 +31,7 @@ class OllamaProvider(LLMProvider):
         self,
         default_model: str,
         base_url: str = "http://localhost:11434",
-        num_ctx: Optional[int] = None,
+        options: Optional[dict[str, Any]] = None,
         capabilities: Optional[dict[str, Capabilities]] = None,
         client: Optional[httpx.AsyncClient] = None,
         timeout: float = 300.0,
@@ -41,14 +41,14 @@ class OllamaProvider(LLMProvider):
         Args:
             default_model: Model used when a request names none.
             base_url: Address of the Ollama server.
-            num_ctx: Context window to request, or None for the server default.
+            options: Ollama options sent with every request, such as ``num_ctx`` or ``num_thread``.
             capabilities: Per-model overrides of :data:`DEFAULT_CAPABILITIES`.
             client: HTTP client to use; one is created if omitted.
             timeout: Seconds to wait between bytes from the server.
         """
         self.default_model = default_model
         self.base_url = base_url
-        self._num_ctx = num_ctx
+        self._options = dict(options or {})
         self._capabilities = capabilities or {}
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
 
@@ -112,11 +112,9 @@ class OllamaProvider(LLMProvider):
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
         if request.system:
             messages.insert(0, {"role": "system", "content": request.system})
-        options: dict = {}
+        options = dict(self._options)
         if request.temperature is not None:
             options["temperature"] = request.temperature
-        if self._num_ctx:
-            options["num_ctx"] = self._num_ctx
         payload: dict = {"model": model, "messages": messages, "stream": True, "options": options}
         caps = self.capabilities(model)
         if request.schema is not None and caps.schema_enforcement:
