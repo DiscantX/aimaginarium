@@ -7,7 +7,7 @@ import pytest
 
 from aimaginarium.api import (
     ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, LocalServer, Narration,
-    OpenScene, Quit, Role, RoleError, Roll, RollResult, Server, Session, StateChanged, StateView, SubmitAction, Undo,
+    OpenScene, Quit, Role, RoleError, Roll, RollResult, Server, Session, StateChanged, StateView, SubmitAction, TurnRetracted, Undo,
 )
 from aimaginarium.engine import PLAYER_ID, create_demo_world
 from aimaginarium.world import WorldStore
@@ -130,10 +130,19 @@ def test_player_view_has_no_ids_and_gm_view_is_dev_only():
     assert gm.perspective == "gm" and "Marta [char-2]" in gm.data["world_state"]
 
 
-def test_unbuilt_dev_commands_are_rejected_politely():
-    dev = served([]).connect(Role.DEV)
-    out = run(events(dev.send(Undo())))
-    assert out[0].event.code == "not_available" and isinstance(out[-1].event, Done)
+def test_undo_takes_back_the_latest_turn_for_the_dev_role():
+    server = served([reply(["One."]), reply(["Two."])])
+    dev = server.connect(Role.DEV)
+
+    async def scenario():
+        for text in ("first", "second"):
+            await events(dev.send(SubmitAction(text)))
+        return await events(dev.send(Undo())), await events(dev.send(Undo())), await events(dev.send(Undo()))
+
+    first, second, third = run(scenario())
+    assert kinds(first) == ["TurnRetracted", "StateChanged", "Done"] and first[0].event == TurnRetracted(2)
+    assert first[0].turn_id == 2 and second[0].event == TurnRetracted(1)
+    assert third[0].event.code == "nothing_to_undo" and isinstance(third[-1].event, Done)
 
 
 def test_subscribers_replay_and_follow_the_log_until_the_session_closes():

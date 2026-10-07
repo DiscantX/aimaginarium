@@ -16,12 +16,9 @@ from ..trace import TraceRecord
 from .commands import Command, GetPlayerView, GetState, GetTrace, OpenScene, Quit, Roll, SubmitAction, Undo
 from .events import (
     ApiEvent, ChangesRejected, CheckCalled, CommandRejected, Done, Envelope, Narration, Repairing, ReplyUnreadable,
-    RollResult, StateChanged, StateView, TraceEvent,
+    RollResult, StateChanged, StateView, TraceEvent, TurnRetracted,
 )
 from .roles import Role, RoleError
-
-_NOT_BUILT = {Undo: "undo (issue #59)"}
-
 
 def player_view(game: Game) -> dict[str, Any]:
     """Returns the player's view of the world plus the story so far."""
@@ -118,16 +115,28 @@ class LocalServer:
             if command.perspective == "player":
                 return self._single(StateView("player", player_view(game)))
             return self._single(StateView("gm", render_state(game.store, game.player_id)))
+        if isinstance(command, Undo):
+            return self._undo()
         if isinstance(command, GetTrace):
             records = game.tracer.records(command.since, command.limit, command.turn)
             return self._single(*(self._trace_event(r) for r in records))
         if isinstance(command, Quit):
             return self._single()
-        return self._rejected("not_available", f"{_NOT_BUILT.get(type(command), command.name)} is not built yet.")
+        return self._rejected("not_available", f"{command.name} is not available.")
 
     async def _single(self, *events: ApiEvent) -> AsyncIterator[ApiEvent]:
         for event in events:
             yield event
+        yield Done()
+
+    async def _undo(self) -> AsyncIterator[ApiEvent]:
+        turn = self.game.undo()
+        if turn is None:
+            yield CommandRejected("nothing_to_undo", "There is no turn to take back.")
+        else:
+            self._turn = turn
+            yield TurnRetracted(turn)
+            yield StateChanged()
         yield Done()
 
     def _rejected(self, code: str, message: str) -> AsyncIterator[ApiEvent]:

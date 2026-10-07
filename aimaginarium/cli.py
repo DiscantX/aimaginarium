@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from .api import (
     ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, LocalServer, Narration,
     OpenScene, Quit, Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent,
+    TurnRetracted, Undo,
 )
 from .engine import Game, create_demo_world
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
@@ -172,6 +173,15 @@ async def show_trace(session: Session, out: Show, args: list[str]) -> None:
     out((f"Turn {wanted}\n" if wanted is not None else "") + format_timeline(records, full="full" in args) + "\n")
 
 
+async def undo_turn(session: Session, out: Show) -> None:
+    """Takes back the latest turn (dev role only)."""
+    for event in await collect(session.send(Undo())):
+        if isinstance(event, TurnRetracted):
+            out(f"Took back turn {event.turn_id}.\n")
+        elif isinstance(event, CommandRejected):
+            out(f"[{event.message}]\n")
+
+
 async def show_story(session: Session, out: Show) -> None:
     """Replays the story so far, for a game that was already begun."""
     view = next(e for e in await collect(session.send(GetPlayerView())) if isinstance(e, StateView))
@@ -191,7 +201,7 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
         opening: Whether to narrate the opening scene first.
     """
     dev = session.role is Role.DEV
-    out("Type what you do. /state shows your situation" + (", /state gm the GM's view, /inspect [turn] [full] the trace" if dev else "") + ", /quit leaves.\n")
+    out("Type what you do. /state shows your situation" + (", /state gm the GM's view, /inspect [turn] [full] the trace, /undo takes back the last turn" if dev else "") + ", /quit leaves.\n")
     if opening:
         await run_turn(session, OpenScene(), ask, out)
     else:
@@ -208,6 +218,8 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
             await show_state(session, out)
         elif text == "/state gm" and dev:
             await show_state(session, out, "gm")
+        elif text == "/undo" and dev:
+            await undo_turn(session, out)
         elif text.split()[:1] == ["/inspect"] and dev:
             await show_trace(session, out, text.split()[1:])
         elif text.startswith("/"):

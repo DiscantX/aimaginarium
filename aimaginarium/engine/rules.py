@@ -106,18 +106,19 @@ class D20Rules:
         total = max(-MAX_ADJUSTMENT, min(MAX_ADJUSTMENT, sum(d for _, d in steps)))
         return Ruling(check.tier, base, steps, total, max(1, min(40, base + total)))
 
-    def roll(self, character: Entity, skill: str, difficulty: int) -> Roll:
+    def roll(self, character: Entity, skill: str, difficulty: int, die: Optional[int] = None) -> Roll:
         """Rolls a check for a character.
 
         Args:
             character: Who is rolling.
             skill: What is being tested.
             difficulty: The number to meet.
+            die: Use this die instead of rolling (a die carried over from a turn that was taken back).
 
         Returns:
             The roll, with its classification.
         """
-        die = self._rng.randint(1, 20)
+        die = self._rng.randint(1, 20) if die is None else die
         modifier = self.modifier(character, skill)
         total = die + modifier
         margin = total - difficulty

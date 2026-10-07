@@ -77,6 +77,10 @@ class CommitError(Exception):
         }
 
 
+class UndoError(Exception):
+    """A turn cannot be taken back (it does not exist, or it is not the latest one)."""
+
+
 class Rejected(Exception):
     """Raised while planning one change; becomes a ChangeError."""
 

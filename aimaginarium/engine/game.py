@@ -245,9 +245,13 @@ class Game:
             return
 
         ruling = self.rules.rule(check)
-        requested = self._record("check.requested", GM, turn, {**check.model_dump(), **ruling.as_payload()},
+        carried = self._carried_die()
+        roll = self.rules.roll(self.store.get_entity(actor), check.skill, ruling.difficulty,
+                               carried.payload["die"] if carried else None)
+        reuse = {"reused_die_from": carried.seq} if carried else {}
+        requested = self._record("check.requested", GM, turn,
+                                 {**check.model_dump(), **ruling.as_payload(), "die": roll.die, **reuse},
                                  [action.seq], [actor])
-        roll = self.rules.roll(self.store.get_entity(actor), check.skill, ruling.difficulty)
         self._pending = _Pending(turn, text, state, request, first, check, requested, roll)
         self.tracer.emit("check.workings", {
             "skill": check.skill, "reason": check.reason, "tier": ruling.tier, **ruling.as_payload(), "die": roll.die,
@@ -287,6 +291,36 @@ class Game:
         async for event in self._commit(second.parsed.changes, turn, [rolled.seq], story):
             yield event
         self._remember(pending.text, story)
+
+    def undo(self) -> Optional[int]:
+        """Takes back the latest turn, whether finished or paused at a check.
+
+        The world is rebuilt without that turn's events and the conversation
+        history is reloaded without it. The die it rolled is carried over to the
+        next check, so undo cannot be used to reroll.
+
+        Returns:
+            The turn that was taken back, or None if there was none.
+        """
+        turn = self.store.last_turn()
+        if turn is None:
+            return None
+        requested = self.store.events(kind="check.requested", turn=turn)
+        die = None
+        if requested and "reused_die_from" not in requested[0].payload:  # a reused die is already carried
+            die = requested[0].payload.get("die")
+        self.store.retract_turn(turn, actor=ENGINE, carried_die=die)
+        self._pending = None
+        self._history = self._load_history()
+        self.turn_id = self.tracer.turn = self.store.last_turn()
+        self.tracer.emit("turn.retracted", {"turn": turn, "carried_die": die}, turn)
+        return turn
+
+    def _carried_die(self) -> Optional[Event]:
+        """Returns the latest ``turn.retracted`` event whose die has not been reused yet, if any."""
+        used = {e.payload.get("reused_die_from") for e in self.store.events(kind="check.requested")}
+        retracted = self.store.events(kind="turn.retracted")
+        return next((e for e in reversed(retracted) if e.payload.get("die") is not None and e.seq not in used), None)
 
     # -- calling the model -----------------------------------------------
 
