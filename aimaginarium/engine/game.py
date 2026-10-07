@@ -112,7 +112,26 @@ class Game:
         self.player_id = player_id
         self.rules = rules or D20Rules()
         self.history_limit = history_limit
-        self._history: list[Message] = []
+        self._history: list[Message] = self._load_history()
+
+    def _load_history(self) -> list[Message]:
+        """Loads past conversation history from the store's event log."""
+        events = self.store.events()
+        turns: dict[int, dict[str, str]] = {}
+        for ev in events:
+            if ev.kind == "player.action":
+                turns.setdefault(ev.turn_id, {})["player"] = ev.payload.get("text", "")
+            elif ev.kind == "llm.call" and "narration" in ev.payload:
+                turns.setdefault(ev.turn_id, {})["narration"] = ev.payload.get("narration", "")
+
+        history: list[Message] = []
+        for turn_id in sorted(turns.keys()):
+            t = turns[turn_id]
+            if "narration" in t:
+                player_text = t.get("player", "(The story begins.)")
+                history.append(Message("user", player_text))
+                history.append(Message("assistant", t["narration"]))
+        return history
 
     async def open_scene(self) -> AsyncIterator[TurnEvent]:
         """Narrates the opening of the story (call this once, before the first turn)."""
@@ -206,14 +225,16 @@ class Game:
             self._record("llm.failed", ENGINE, turn, {**prompt.record(), "error": str(exc)}, causes or [])
             yield ReplyUnreadable(f"the storyteller could not be reached: {exc}")
             return
-        self._record("llm.call", ENGINE, turn, {**prompt.record(), "model": final.model, "usage": asdict(final.usage)},
-                     causes or [])
         try:
             data = json.loads(strip_fences(final.text))
             parts = data["narration"]
             narration = "\n\n".join(parts) if isinstance(parts, list) else str(parts)
+            self._record("llm.call", ENGINE, turn, {**prompt.record(), "model": final.model, "usage": asdict(final.usage), "narration": narration},
+                         causes or [])
             yield _Reply(narration, schema.model_validate(data), final)
         except (ValueError, KeyError, TypeError, ValidationError) as exc:
+            self._record("llm.call", ENGINE, turn, {**prompt.record(), "model": final.model, "usage": asdict(final.usage)},
+                         causes or [])
             self._record("reply.invalid", ENGINE, turn, {"error": str(exc)[:500], "text": final.text[:2000]}, causes or [])
             yield ReplyUnreadable(f"the reply could not be read: {exc}")
 

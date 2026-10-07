@@ -4,7 +4,8 @@ import asyncio
 
 from aimaginarium.cli import main, play
 from engine_helpers import make_game, reply
-from aimaginarium.engine import PLAYER_ID, create_demo_world
+from aimaginarium.engine import PLAYER_ID, create_demo_world, Game
+from aimaginarium.prompts import PromptBuilder
 from aimaginarium.world import WorldStore
 
 
@@ -68,3 +69,17 @@ def test_main_reports_a_missing_config(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("AIMAGINARIUM_CONFIG", raising=False)
     assert main(["--world", str(tmp_path / "w.sqlite")]) == 2
     assert "configuration problem" in capsys.readouterr().err
+
+
+def test_conversation_history_persists_across_restart():
+    store = WorldStore.open()
+    create_demo_world(store)
+    game1, factory = make_game(store, [reply(["Hello world."]), reply(["Second response."])])
+    run_session(game1, ["First action.", "/quit"], opening=True)
+
+    game2 = Game(store, factory, PromptBuilder.from_directory(), PLAYER_ID)
+    assert len(game2._history) == 4
+    assert game2._history[0].content == "(The story begins.)"
+    assert game2._history[1].content == "Hello world."
+    assert game2._history[2].content == "First action."
+    assert game2._history[3].content == "Second response."
