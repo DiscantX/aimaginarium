@@ -22,7 +22,7 @@ from .engine import (
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
-from .ui.utils.spinner import Spinner
+from .ui.utils import Spinner, format_assistant_message
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
@@ -53,14 +53,18 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
     spinner = Spinner()
     spinner.start()
     first = True
+    chunks: list[str] = []
     try:
         async for event in events:
             if first:
                 spinner.stop()
                 first = False
             if isinstance(event, Narration):
-                out(event.text, end="")
+                chunks.append(event.text)
             elif isinstance(event, CheckCalled):
+                if chunks:
+                    out(format_assistant_message("".join(chunks)), end="")
+                    chunks.clear()
                 out()
                 await ask(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ")
                 roll = event.roll
@@ -73,7 +77,9 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
                 out(f"\n\n[{event.reason}]", end="")
     finally:
         spinner.stop()
-    out("\n")
+        if chunks:
+            out(format_assistant_message("".join(chunks)), end="")
+    out()
 
 
 async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool = True) -> None:
@@ -93,8 +99,7 @@ async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool
             if msg.role == "user":
                 out(f"> {msg.content}")
             elif msg.role == "assistant":
-                out(msg.content)
-                out()
+                out(format_assistant_message(msg.content), end="")
     while True:
         try:
             text = (await ask("> ")).strip()

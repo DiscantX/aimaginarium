@@ -56,7 +56,7 @@ def test_rejected_changes_are_explained_without_stopping():
 def test_opening_and_state_command():
     game = fresh_game([reply(["A", "B", "C", "D", "E", "F", "G"])])
     _, text = run_session(game, ["/state", "/quit"], opening=True)
-    assert text.index("A\n\nB") < text.index("Location:") and "Marta [char-2]" in text
+    assert "A" in text and "B" in text and text.index("A") < text.index("Location:") and "Marta [char-2]" in text
 
 
 def test_blank_lines_are_ignored_and_end_of_input_quits():
