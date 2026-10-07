@@ -97,6 +97,10 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Decided]** Variants of a recipe are chosen by a small selection policy (fixed, random per session, or a replay config); each call records recipe, variant and fragment hashes in the event log.
 
+**[Built]** `aimaginarium/prompts/`: `FileFragmentSource` (the `FragmentSource` interface; ids like `core/tenets`, optional front matter), TOML recipes in `prompts/library/recipes/`, and `PromptBuilder.build(recipe, static, state)`. A recipe lists `system` fragments (stable, rendered first, with the narration plan appended) and `state` fragments (volatile, rendered into the final user message after the history, followed by the player's input). A fragment id may hold placeholders resolved from the state, so `outcome/{classification}` picks the check-outcome instruction. `Prompt.record()` gives recipe, variant and fragment hashes for the event log. Variants are `[variants.<name>]` tables that replace `system`, `state` or `plan`; policies are `Fixed`, `PerSession` (deterministic from the session id) and `Pinned` (replays). The starter fragments are drafts to be rewritten by the author.
+
+**[Built]** The narration plan is a list of slots (`id`, `instruction`, `count` or `min`/`max`). `NarrationPlan.reply_model()` builds the reply schema with `narration` first, as a list of paragraphs sized by the plan, followed by the engine's own fields. Only the last slot may vary in length, so a paragraph's slot follows from its position (`slot_of`). **[Open]** `NarrationExtractor` joins the list into one text stream, so per-slot tagging while streaming is not built yet.
+
 **[Decided]** A second, database layer for per-world overrides comes later behind a fragment-source interface (world overrides first, repo files as fallback). Only the file source is built now.
 
 ## A/B runs

@@ -1,0 +1,11 @@
+# The second call of a check turn: narrate the result of the roll.
+id = "check_outcome"
+task = "check_outcome"
+system = ["core/role", "core/tenets", "style/prose"]
+state = ["state/scene", "state/roll", "outcome/{classification}"]
+
+[[plan]]
+id = "result"
+min = 1
+max = 3
+instruction = "Narrate what happens as a result of the roll."

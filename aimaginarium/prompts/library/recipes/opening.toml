@@ -1,0 +1,20 @@
+# The first turn of a session: the narration plan shapes the structure of the story's opening.
+id = "opening"
+task = "opening"
+system = ["core/role", "core/tenets", "style/prose"]
+state = ["state/scene"]
+
+[[plan]]
+id = "world"
+count = 3
+instruction = "Give an overview of the world the story takes place in."
+
+[[plan]]
+id = "place"
+count = 2
+instruction = "Show where the player's character is in the world and in the town."
+
+[[plan]]
+id = "scene"
+count = 2
+instruction = "Show who is around, drawing on facts from the character sheet. Leave the next move to the player."
