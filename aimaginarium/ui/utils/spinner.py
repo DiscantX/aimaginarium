@@ -6,7 +6,7 @@ import random
 import sys
 import threading
 import time
-from typing import IO, Optional, Sequence
+from typing import IO, Any, Optional, Sequence
 
 DEFAULT_MESSAGES = (
     "Consulting the dark oracle...",
@@ -63,7 +63,7 @@ class Spinner:
                 self._thread.join(timeout=1.0)
             self._thread = None
             try:
-                self.stream.write("\r\033[K")
+                self.stream.write("\r\033[K\033[0m")
                 self.stream.flush()
             except Exception:
                 pass

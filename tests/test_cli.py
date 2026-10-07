@@ -38,13 +38,12 @@ def test_plain_turn_prints_the_narration_and_quits():
     assert "Marta nods." in text and asked == ["> ", "> "]
 
 
-def test_check_pauses_for_the_roll_and_never_shows_the_difficulty():
+def test_check_shows_the_difficulty_and_pauses_for_the_roll():
     check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
     game = fresh_game([reply(["You creep."], check=check), reply(["You slip past."])], die=14)
     asked, text = run_session(game, ["I sneak.", "", "/quit"])
-    assert asked[1].startswith("\n[Stealth check] Press Enter") and "You rolled 14 +1 = 15." in text
+    assert asked[1].startswith("\n[Stealth check, difficulty 12] Press Enter") and "You rolled 14 +1 = 15." in text
     assert text.index("You creep.") < text.index("You rolled") < text.index("You slip past.")
-    assert "12" not in text
 
 
 def test_rejected_changes_are_explained_without_stopping():
@@ -83,3 +82,35 @@ def test_conversation_history_persists_across_restart():
     assert game2._history[1].content == "Hello world."
     assert game2._history[2].content == "First action."
     assert game2._history[3].content == "Second response."
+
+
+def test_pending_input_is_discarded_on_windows(monkeypatch):
+    import sys
+    import types
+    from aimaginarium.cli import discard_pending_input
+
+    keys = list("\r\r\r")
+    fake = types.SimpleNamespace(kbhit=lambda: bool(keys), getwch=lambda: keys.pop())
+    monkeypatch.setitem(sys.modules, "msvcrt", fake)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    discard_pending_input()
+    assert keys == []
+
+
+def test_pending_input_is_flushed_on_unix_and_ignored_when_not_a_terminal(monkeypatch):
+    import sys
+    import types
+    from aimaginarium.cli import discard_pending_input
+
+    calls = []
+    fake = types.SimpleNamespace(tcflush=lambda fd, how: calls.append((fd, how)), TCIFLUSH=0)
+    monkeypatch.setitem(sys.modules, "termios", fake)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sys.stdin, "fileno", lambda: 7, raising=False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False, raising=False)
+    discard_pending_input()
+    assert calls == []
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    discard_pending_input()
+    assert calls == [(7, 0)]

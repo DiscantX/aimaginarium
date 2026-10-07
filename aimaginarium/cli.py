@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import shutil
 import sys
 import textwrap
@@ -29,8 +30,34 @@ Ask = Callable[[str], Awaitable[str]]
 Show = Callable[..., None]
 
 
+def discard_pending_input() -> None:
+    """Drops keystrokes typed while the game was busy.
+
+    Without this, an Enter pressed while the storyteller is still writing is
+    buffered and answers the next prompt at once (a roll that happens on its own,
+    a run of empty ``>`` prompts). The cost is that text typed ahead of a prompt
+    is lost; nothing the player types before they can see the prompt is wanted.
+    Does nothing when input is not a terminal.
+    """
+    if not sys.stdin.isatty():
+        return
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            while msvcrt.kbhit():
+                msvcrt.getwch()
+        else:
+            import termios
+
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except (ImportError, OSError, ValueError):
+        pass
+
+
 async def ask_input(prompt: str) -> str:
-    """Reads a line without blocking the event loop."""
+    """Reads a line without blocking the event loop, ignoring anything typed earlier."""
+    discard_pending_input()
     return await asyncio.to_thread(input, prompt)
 
 
@@ -62,7 +89,7 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
                 out(event.text, end="")
             elif isinstance(event, CheckCalled):
                 out()
-                await ask(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ")
+                await ask(f"\n[{event.roll.skill.title()} check, difficulty {event.roll.difficulty}] Press Enter to roll... ")
                 roll = event.roll
                 out(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n")
                 spinner.start()
