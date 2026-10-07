@@ -43,7 +43,8 @@ def format_assistant_message(text: str, width: Optional[int] = None) -> str:
             if lines:
                 lines[0] = ind + lines[0]
         else:
-            lines = ["  " + line for line in lines]
+            if lines:
+                lines[0] = "  " + lines[0]
 
         formatted_paragraphs.append("\n".join(lines))
 
