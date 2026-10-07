@@ -49,7 +49,7 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Decided]** Use the HTTP API directly (`httpx`, NDJSON streaming) and not the Python SDK. The SDK's `ChatResponse` (0.6.3) drops `prompt_eval_cached_count`, which Ollama's API docs list and the server logs suggest exists. The field depends on the server version; confirm on a live server.
 
-**[Verified]** Probe run on the author's machine (phi4-mini, October 2026): Ollama accepted a full JSON schema with a nested model and a free-form `dict` field, and the HTTP API reports `prompt_eval_cached_count` (a repeated 1,474-token prompt reported 1,473 cached; the first call reported 19). A CPU-only local model is slow (tens of seconds to minutes per turn), so streaming the narration and committing in the background matter.
+**[Verified]** Probe run on the author's machine (phi4-mini, October 2026): Ollama accepted a full JSON schema with a nested model and a free-form `dict` field, and the HTTP API reports `prompt_eval_cached_count` (a repeated 1,474-token prompt reported 1,473 cached; the first call reported 19). A second run reproduced all three results. A CPU-only local model is slow (tens of seconds to minutes per turn), so streaming the narration and committing in the background matter.
 
 **[Open]** Whether Gemini accepts schemas with free-form `dict` fields.
 
@@ -57,7 +57,15 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Decided]** Use Google's official `google-genai` SDK (an optional extra, `aimaginarium[gemini]`), behind `LLMProvider`, so it can be replaced without touching the engine. Unlike the Ollama SDK, it is the first-party reference client; it exposes async streaming, `cached_content_token_count`, thinking tokens and full JSON schemas (`response_json_schema`). Thinking tokens are counted as output tokens in `Usage`. Extra generation config (for example a thinking budget) is passed through the provider's `config` dict.
 
-**[Open]** Needs a live key to confirm: that nested models and free-form `dict` fields are accepted, that cached tokens are reported for a repeated prefix, and that key order is preserved so the narration streams first. Run `local_llm/tests/probe_llm.py gemini <model>`.
+**[Verified]** Probe run with `gemini-3.5-flash-lite` (October 2026): the full schema with a nested model and a free-form `dict` was accepted; the narration key came first in the reply; a single string narration produced escaped `\n\n` paragraph breaks (the paragraph problem is specific to small local models), and the list form returned three paragraphs.
+
+**[Open]** Prompt cache: 0 cached tokens on a repeated 1,473-token prefix. Google's caching docs (updated August 2026) give a 4,096-token minimum for the Gemini 3.5 series and do not list flash-lite, so this was probably below the minimum. Retest with a prefix above 4,096 tokens (`probe_llm.py gemini <model> 500`). Implicit caching is best-effort, so a hit is not guaranteed.
+
+**[Decided]** The provider switches off the SDK's automatic function-calling loop (the engine executes tool calls, not the SDK).
+
+## Configuration
+
+**[Proposed]** `ProviderFactory` takes a plain mapping: named `providers` (kind, default model, kind-specific settings such as `options` or `config`, optional per-model `capabilities`) and `tasks` (task name to provider and optional model, with a `default` task). `factory.route("narrate")` returns the provider and model for a task, so different tasks can use different models (a small model for the check ruling, the strongest for narration). API keys are never in the mapping: each provider names the environment variable that holds its key (default `GEMINI_API_KEY`), loaded from `.env`, which is git-ignored. **[Open]** The file format that produces the mapping (TOML suggested) is left to the application layer (#16).
 
 ## Prompt layout and cost (measured)
 

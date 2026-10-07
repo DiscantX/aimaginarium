@@ -1,7 +1,10 @@
 """Live probe for the open provider questions.
 
 Run: python local_llm/tests/probe_llm.py ollama [model]
-     python local_llm/tests/probe_llm.py gemini <model>   (key in .env or the environment)
+     python local_llm/tests/probe_llm.py gemini <model> 500   (key in .env or the environment)
+
+The last argument sets the cache test's prefix size (about 12 tokens per unit). Gemini's
+implicit cache needs roughly 4,096+ tokens, so use 500 there.
 
 Checks (1) whether a full JSON schema, with a nested model and a free-form dict,
 is accepted; (2) whether paragraph breaks appear when the narration is one string versus a
@@ -44,7 +47,7 @@ def build(provider: str, model: str) -> LLMProvider:
     return OllamaProvider(model, options={"num_ctx": 8192, "num_thread": 2})
 
 
-async def main(provider: str, model: str) -> None:
+async def main(provider: str, model: str, repeats: int) -> None:
     llm = build(provider, model)
     user = Message("user", "I light a torch and step into the cave.")
 
@@ -70,8 +73,8 @@ async def main(provider: str, model: str) -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"   list FAILED: {exc}")
 
-    print("3. Prompt cache on a repeated long prefix")
-    long_system = system + "\n" + "The cave has many chambers and old marks on the walls. " * 120
+    print(f"3. Prompt cache on a repeated long prefix (about {repeats * 12} tokens)")
+    long_system = system + "\n" + "The cave has many chambers and old marks on the walls. " * repeats
     for attempt in (1, 2):
         events = [e async for e in llm.stream(Request(system=long_system, messages=(user,)))]
         usage = next(e for e in events if isinstance(e, Response)).usage
@@ -81,4 +84,4 @@ async def main(provider: str, model: str) -> None:
 
 
 load_dotenv()  # finds a .env file in this folder or any parent (the repo root)
-asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "phi4-mini"))
+asyncio.run(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "phi4-mini", int(sys.argv[3]) if len(sys.argv) > 3 else 120))

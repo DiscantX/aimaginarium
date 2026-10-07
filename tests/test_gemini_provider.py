@@ -81,6 +81,7 @@ def test_request_mapping():
     assert config.system_instruction == "rules" and config.temperature == 0.4
     assert config.response_mime_type == "application/json"
     assert config.response_json_schema == Reply.model_json_schema()
+    assert config.automatic_function_calling.disable is True
 
 
 def test_json_mode_and_extra_config():

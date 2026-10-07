@@ -97,7 +97,8 @@ class GeminiProvider(LLMProvider):
 
     def _build_config(self, request: Request, model: str) -> "types.GenerateContentConfig":
         """Builds the generation config for a request."""
-        fields = dict(self._config)
+        # The engine, not the SDK, executes tool calls, so the SDK's automatic loop stays off.
+        fields = {"automatic_function_calling": {"disable": True}, **self._config}
         if request.system:
             fields["system_instruction"] = request.system
         if request.temperature is not None:
