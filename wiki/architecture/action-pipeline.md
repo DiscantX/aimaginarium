@@ -45,7 +45,7 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 - Factors double as the **dependencies** of the precedent log.
 - **[Decided]** The player sees the number before rolling.
 - **[Built]** In `D20Rules.rule()`: tiers very_easy 5, easy 10, medium 15, hard 20, very_hard 25, nearly_impossible 30 (the 5e DC ladder); factors small 1, medium 2, large 4, harder adding and easier subtracting; the total adjustment is limited to +-6; the result stays in 1..40. The breakdown (`base`, `adjustments`, `difficulty`) is stored in the `check.requested` event next to the model's `tier` and `factors`. Unknown tier, size or effect words from a weaker model are normalised (medium, small, harder) instead of failing the turn.
-- **[Open]** Where the tier and factors are decided. Today the narrator decides them in call 1, together with the setup narration. Call 2 cannot, because it happens after the roll and the ruling must be committed before it. A separate, focused call between call 1 and the roll is possible at the cost of a third call on check turns.
+- **[Decided]** For now the narrator decides the tier and factors in call 1, together with the setup narration. Call 2 cannot, because it happens after the roll and the ruling must be committed before it. **[Open]** A separate, focused call between call 1 and the roll is possible at the cost of a third call on check turns; Ficus asked to hold off until more testing shows whether call 1's prompt is overloaded or the factors come out poorly.
 
 ## Precedent log
 
