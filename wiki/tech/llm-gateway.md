@@ -61,6 +61,8 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Open]** Prompt cache: 0 cached tokens on a repeated 1,473-token prefix. Google's caching docs (updated August 2026) give a 4,096-token minimum for the Gemini 3.5 series and do not list flash-lite, so this was probably below the minimum. Retest with a prefix above 4,096 tokens (`probe_llm.py gemini <model> 500`). Implicit caching is best-effort, so a hit is not guaranteed.
 
+**[Verified]** `Usage.time_to_first_token` is measured by every provider through `ResponseTimer`, so clients and tests read it the same way. `tests/test_gemini_models.py` (needs a key; skipped without one) checks status, TTFT and total time for `gemini-3.5-flash-lite` and two Gemma models, which the free tier offers at 14,400 requests per day each. `gemma-4-31b-it` often answers 500 or 503. **[Open]** Whether the Gemma models handle schema-constrained JSON and a system prompt well enough for the cheaper tasks (such as the check ruling); only liveness and timing are tested so far.
+
 **[Decided]** The provider switches off the SDK's automatic function-calling loop (the engine executes tool calls, not the SDK).
 
 ## Retries and outages
