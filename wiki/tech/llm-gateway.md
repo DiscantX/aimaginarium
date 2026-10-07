@@ -75,7 +75,7 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 ## Configuration
 
-**[Proposed]** `ProviderFactory` takes a plain mapping: named `providers` (kind, default model, kind-specific settings such as `options` or `config`, optional per-model `capabilities`) and `tasks` (task name to provider and optional model, with a `default` task). `factory.route("narrate")` returns the provider and model for a task, so different tasks can use different models (a small model for the check ruling, the strongest for narration). API keys are never in the mapping: each provider names the environment variable that holds its key (default `GEMINI_API_KEY`), loaded from `.env`, which is git-ignored. **[Open]** The file format that produces the mapping (TOML suggested) is left to the application layer (#16).
+**[Proposed]** `ProviderFactory` takes a plain mapping: named `providers` (kind, default model, kind-specific settings such as `options` or `config`, optional per-model `capabilities`) and `tasks` (task name to provider and optional model, with a `default` task). `factory.route("narrate")` returns the provider and model for a task, so different tasks can use different models (a small model for the check ruling, the strongest for narration). API keys are never in the mapping: each provider names the environment variable that holds its key (default `GEMINI_API_KEY`), loaded from `.env`, which is git-ignored. **[Decided]** The mapping is read from a TOML file (`aimaginarium.toml`, git-ignored; `aimaginarium.example.toml` is the template). The path comes from an argument, then `AIMAGINARIUM_CONFIG`, then the current directory; `factory_from_file()` builds the factory from it.
 
 ## Prompt layout and cost (measured)
 
