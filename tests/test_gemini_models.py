@@ -1,20 +1,22 @@
-"""Test suite for Gemini and Gemma models, testing HTTP response status, time to first token, and total request time."""
+"""Test suite for Gemini and Gemma models, testing response status, time to first token, and total request time using the LLM pipeline."""
 
+import asyncio
 import os
 import time
 import pytest
 from dotenv import load_dotenv
-from google import genai
-from google.genai.errors import APIError
+
+from aimaginarium.llm import Chunk, Message, ProviderError, Request, Response
+from aimaginarium.llm.providers.gemini import GeminiProvider
 
 load_dotenv()
-# Note that all test so far have returned either 500 or 503 errors with `gemma-4-31b-it``
-models = ["gemma-4-26b-a4b-it", "gemini-3.5-flash-lite", "gemma-4-31b-it",]
+# Note that `gemma-4-31b-it` often returns either 500 or 503 errors
+models = ["gemini-3.5-flash-lite", "gemma-4-26b-a4b-it", "gemma-4-31b-it",]
 
 
-def list_models(client):
-    """Utility to list available models and their supported actions."""
-    available_models = client.models.list()
+def list_models(provider: GeminiProvider):
+    """Utility to list available models and their supported actions using the provider's client."""
+    available_models = provider._client.models.list()
     print("\nAvailable Models")
     print("=" * 80)
     print(f"{'Model Name':<40} | {'Supported Actions'}")
@@ -25,60 +27,64 @@ def list_models(client):
 
 
 @pytest.fixture(scope="module")
-def client():
-    """Initialize the GenAI client, skipping if GEMINI_API_KEY is not configured."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+def api_key():
+    """Skip if GEMINI_API_KEY is not configured."""
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
         pytest.skip("GEMINI_API_KEY environment variable not set.")
-    client_instance = genai.Client()
-
-    return client_instance
-
+    return key
 
 
 @pytest.mark.parametrize("model_name", models)
-def test_model_response_and_timing(client, model_name):
-    """Test HTTP response status, time to first token (TTFT), and total request time for each model."""
+def test_model_response_and_timing(api_key, model_name):
+    """Test response, time to first token (TTFT), and total request time for each model using GeminiProvider."""
     prompt = "Hello! Confirm you are active."
-    
-    start_time = time.perf_counter()
-    time_to_first_token = None
-    full_response_text = ""
-    
-    try:
-        chat = client.chats.create(model=model_name)
-        response_stream = chat.send_message_stream(message=prompt)
-        
-        for chunk in response_stream:
-            if time_to_first_token is None:
-                time_to_first_token = time.perf_counter() - start_time
-            if chunk.text:
-                full_response_text += chunk.text
-                
+    provider = GeminiProvider(default_model=model_name, api_key=api_key)
+    request = Request(messages=(Message("user", prompt),))
+
+    async def run_test():
+        start_time = time.perf_counter()
+        time_to_first_token = None
+        full_response_text = ""
+        final_response = None
+
+        async for event in provider.stream(request):
+            if isinstance(event, Chunk):
+                if time_to_first_token is None:
+                    time_to_first_token = time.perf_counter() - start_time
+                full_response_text += event.text
+            elif isinstance(event, Response):
+                final_response = event
+
         end_time = time.perf_counter()
         total_time = end_time - start_time
-        
+
         if time_to_first_token is None:
             time_to_first_token = total_time
-            
+
+        return time_to_first_token, total_time, full_response_text, final_response
+
+    try:
+        time_to_first_token, total_time, full_response_text, final_response = asyncio.run(run_test())
+
         print(f"\n--- Model Test Results: {model_name} ---")
         print(f"✅ Response Code: 200 OK")
         print(f"⏱️ Time to First Token (TTFT): {time_to_first_token:.4f}s")
         print(f"⏱️ Total Request Time: {total_time:.4f}s")
         print(f"💬 Response Output: {full_response_text.strip()}")
-        
+        if final_response and final_response.usage:
+            print(f"📊 Usage: {final_response.usage}")
+
         assert full_response_text is not None
         assert total_time > 0
         assert time_to_first_token > 0
         assert total_time >= time_to_first_token
+        assert final_response is not None
+        assert final_response.text == full_response_text
 
-    except APIError as e:
+    except ProviderError as e:
         print(f"\n--- Model Test Results: {model_name} ---")
-        print(f"❌ API Error Response Code: {e.code}")
-        print(f"Message: {e.message}")
-        print(f"Status: {getattr(e, 'status', 'N/A')}")
-        print(f"Full Error Details / Args: {e.args}")
-        assert isinstance(e.code, int)
-        assert e.code >= 400
+        print(f"❌ Provider Error: {e}")
+        assert isinstance(e, ProviderError)
     except Exception as e:
         pytest.fail(f"❌ Unexpected error for model {model_name}: {e}")
