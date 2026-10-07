@@ -227,3 +227,9 @@ def test_recipe_without_a_plan_has_no_narration_and_uses_the_schema_as_given(tmp
     prompt = PromptBuilder.from_directory(tmp_path).build("r", {"x": 1}, {"x": 2})
     assert prompt.plan is None and prompt.system == "Hello 1." and "paragraph" not in prompt.system
     assert prompt.request(schema=Extra).schema is Extra
+
+
+def test_opening_introduces_the_player_character_and_the_narrator_is_told_who_they_are():
+    prompt = PromptBuilder.from_directory(LIBRARY).build("opening", state={"world_state": "w", "character": "c"})
+    assert "Introduce the player's character" in prompt.system
+    assert 'the person you address as "you"' in prompt.system

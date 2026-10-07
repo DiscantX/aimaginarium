@@ -12,7 +12,7 @@ instruction = "Give an overview of the world the story takes place in."
 [[plan]]
 id = "place"
 count = 2
-instruction = "Show where the player's character is in the world and in the town."
+instruction = "Introduce the player's character: who they are (name, background and what they carry, from the character sheet), and where they are in the world and in the town."
 
 [[plan]]
 id = "scene"
