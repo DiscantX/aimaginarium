@@ -43,29 +43,22 @@ def test_model_response_and_timing(api_key, model_name):
     request = Request(messages=(Message("user", prompt),))
 
     async def run_test():
-        start_time = time.perf_counter()
-        time_to_first_token = None
         full_response_text = ""
         final_response = None
 
         async for event in provider.stream(request):
             if isinstance(event, Chunk):
-                if time_to_first_token is None:
-                    time_to_first_token = time.perf_counter() - start_time
                 full_response_text += event.text
             elif isinstance(event, Response):
                 final_response = event
 
-        end_time = time.perf_counter()
-        total_time = end_time - start_time
-
-        if time_to_first_token is None:
-            time_to_first_token = total_time
-
-        return time_to_first_token, total_time, full_response_text, final_response
+        return full_response_text, final_response
 
     try:
-        time_to_first_token, total_time, full_response_text, final_response = asyncio.run(run_test())
+        full_response_text, final_response = asyncio.run(run_test())
+
+        time_to_first_token = final_response.usage.time_to_first_token if final_response and final_response.usage and final_response.usage.time_to_first_token is not None else 0.0
+        total_time = final_response.usage.latency if final_response and final_response.usage else 0.0
 
         print(f"\n--- Model Test Results: {model_name} ---")
         print(f"✅ Response Code: 200 OK")
