@@ -1,7 +1,7 @@
 # A normal turn: prose plus proposed state changes (and a check request when uncertain).
 id = "narrate"
 task = "narrate"
-system = ["core/role", "core/tenets", "style/prose"]
+system = ["core/role", "core/tenets", "style/prose", "core/changes", "core/checks"]
 state = ["state/scene"]
 
 [[plan]]
@@ -11,4 +11,4 @@ max = 4
 instruction = "Say what happens after the player's action, in the fiction."
 
 [variants.terse]
-system = ["core/role", "core/tenets", "style/terse"]
+system = ["core/role", "core/tenets", "style/terse", "core/changes", "core/checks"]

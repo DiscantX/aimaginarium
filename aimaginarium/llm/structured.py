@@ -54,7 +54,7 @@ class StructuredCaller:
         for _ in range(self.max_attempts):
             response = await self.provider.generate(request)
             try:
-                return schema.model_validate_json(_strip_fences(response.text)), response
+                return schema.model_validate_json(strip_fences(response.text)), response
             except ValidationError as exc:
                 errors = _summarise(exc)
                 request = replace(
@@ -73,7 +73,7 @@ class StructuredCaller:
         return replace(request, system=f"{request.system}\n\n{hint}".strip())
 
 
-def _strip_fences(text: str) -> str:
+def strip_fences(text: str) -> str:
     """Removes a Markdown code fence some models wrap around JSON."""
     match = _FENCE.match(text)
     return match.group(1) if match else text

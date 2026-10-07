@@ -21,3 +21,6 @@ data/srd.sqlite
 
 # Local configuration (copy aimaginarium.example.toml)
 aimaginarium.toml
+
+# Local game worlds
+worlds/
