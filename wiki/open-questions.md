@@ -19,7 +19,8 @@ Consolidated from the planning discussion. Delete an item when it is decided and
 
 ## Architecture
 
-- Where the tier and factors are decided: in call 1 (today) or in a separate focused call before the roll ([action pipeline](architecture/action-pipeline.md)).
+- Whether the tier and factors need a separate focused call before the roll; held off until more testing ([action pipeline](architecture/action-pipeline.md)).
+- Developer tools, to discuss before building: a trace separate from the event log (full prompts and replies, retries, fallbacks, cool-downs, timings, commit results) with a file sink and a live stream; an inspect command that prints a turn as a timeline (calls, latency, TTFT, cache hit rate, check workings, state diffs); and Textual dev panels fed by the same stream: call timeline, last full prompt, per-turn world diffs, check workings, retry and fallback status, and a live panel showing what `/state` shows now, updating automatically.
 - Confirm the draft core-element list and the plugin contract hooks ([core engine](architecture/core-engine.md)).
 - Time model: confirm the three-way split (commit order, in-world time, causal links), time frames, and which time-travel flavors the engine supports ([time](architecture/time-and-knowledge.md)).
 - Server-client: confirm an authoritative server with an in-process server for single player ([multiplayer](architecture/multiplayer-and-api.md)).
