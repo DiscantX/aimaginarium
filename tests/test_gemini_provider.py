@@ -67,6 +67,8 @@ def test_streams_chunks_then_response_with_usage():
     final = events[-1]
     assert isinstance(final, Response) and final.text == "Hello" and final.model == "gemini-test"
     assert (final.usage.prompt_tokens, final.usage.cached_tokens, final.usage.output_tokens) == (100, 80, 15)
+    assert final.usage.time_to_first_token is not None
+    assert final.usage.time_to_first_token >= 0
 
 
 def test_request_mapping():

@@ -24,3 +24,6 @@ include = ["aimaginarium*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:.*_UnionGenericAlias.*:DeprecationWarning",
+]

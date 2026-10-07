@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 
 from ..base import (
-    Capabilities, Chunk, LLMProvider, ProviderError, Request, Response, RetryableError, StreamEvent, Usage,
+    Capabilities, Chunk, LLMProvider, ProviderError, Request, Response, RetryableError, StreamEvent, Usage, ResponseTimer,
 )
 
 DEFAULT_CAPABILITIES = Capabilities(schema_enforcement=True, json_mode=True, reports_cache=True)
@@ -74,7 +74,7 @@ class OllamaProvider(LLMProvider):
             ProviderError: On other HTTP errors or a malformed stream.
         """
         model = request.model or self.default_model
-        started = time.perf_counter()
+        timer = ResponseTimer()
         text: list[str] = []
         final: dict = {}
         try:
@@ -89,6 +89,7 @@ class OllamaProvider(LLMProvider):
                         raise ProviderError(part["error"])
                     piece = part.get("message", {}).get("content", "")
                     if piece:
+                        timer.record_chunk()
                         text.append(piece)
                         yield Chunk(piece)
                     if part.get("done"):
@@ -103,7 +104,8 @@ class OllamaProvider(LLMProvider):
             prompt_tokens=final.get("prompt_eval_count", 0),
             cached_tokens=final.get("prompt_eval_cached_count"),
             output_tokens=final.get("eval_count", 0),
-            latency=time.perf_counter() - started,
+            latency=timer.latency(),
+            time_to_first_token=timer.time_to_first_token,
         )
         yield Response("".join(text), final.get("model", model), usage)
 
