@@ -13,43 +13,35 @@ Example::
         },
         "tasks": {
             "default": {"provider": "gemini"},
-            "check": {"provider": "local"},
-            "narrate": {"provider": "gemini", "model": "gemini-3.5-flash"},
+            "summarize": {"provider": "local"},
+            "narrate": {
+                "provider": "gemini",
+                "model": "gemini-3.5-flash",
+                "fallback": ["gemini:gemini-3.5-flash-lite", "local"],
+            },
         },
+        "fallback": {"cooldown": 60},
     }
+
+A fallback entry is ``provider`` or ``provider:model``; the model may itself
+contain colons (only the first one separates).
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
+import time
 from typing import Any, Callable, Mapping, Optional
 
-from .base import Capabilities, LLMProvider, Request
+from .base import Capabilities, LLMProvider
 from .retry import RetryingProvider, RetryNotice, RetryPolicy
+from .route import Candidate, Cooldown, FallbackNotice, Route
 
 Builder = Callable[[Mapping[str, Any], Mapping[str, str]], LLMProvider]
 
 
 class ConfigError(Exception):
     """The LLM configuration is missing or invalid."""
-
-
-@dataclass(frozen=True)
-class Route:
-    """The provider and model chosen for a task.
-
-    Attributes:
-        provider: The provider to call.
-        model: The model to ask it for.
-    """
-
-    provider: LLMProvider
-    model: str
-
-    def with_model(self, request: Request) -> Request:
-        """Returns ``request`` addressed to this route's model."""
-        return replace(request, model=self.model)
 
 
 def _capabilities(spec: Mapping[str, Any]) -> Optional[dict[str, Capabilities]]:
@@ -89,6 +81,8 @@ class ProviderFactory:
         env: Optional[Mapping[str, str]] = None,
         builders: Optional[Mapping[str, Builder]] = None,
         on_retry: Optional[Callable[[RetryNotice], None]] = None,
+        on_fallback: Optional[Callable[[FallbackNotice], None]] = None,
+        clock: Callable[[], float] = time.monotonic,
     ):
         """Initialises the factory.
 
@@ -98,6 +92,8 @@ class ProviderFactory:
             env: Environment to read keys from; defaults to ``os.environ``.
             builders: Extra provider kinds, as ``kind -> builder(spec, env)``.
             on_retry: Called before each retry wait, so a client can tell the player.
+            on_fallback: Called when a task moves on to its next candidate.
+            clock: Monotonic time source for the fallback cool-down (replaceable in tests).
 
         Every provider is wrapped in :class:`RetryingProvider`. The optional ``retry``
         mapping (top level, or inside a provider spec to override it) sets the
@@ -107,27 +103,39 @@ class ProviderFactory:
         self._env = os.environ if env is None else env
         self._builders: dict[str, Builder] = {"ollama": _build_ollama, "gemini": _build_gemini, **(builders or {})}
         self._on_retry = on_retry
+        self._on_fallback = on_fallback
+        self._cooldown = Cooldown(self._config.get("fallback", {}).get("cooldown", 60.0), clock)
         self._providers: dict[str, LLMProvider] = {}
 
     def route(self, task: str) -> Route:
-        """Chooses the provider and model for a task.
+        """Chooses the candidates for a task.
 
         Args:
             task: Task name, such as ``"narrate"``. Unknown tasks use ``"default"``.
 
         Returns:
-            The route for the task.
+            The route: the task's provider and model, then its fallbacks in order.
 
         Raises:
-            ConfigError: If the task, provider or kind is not configured.
+            ConfigError: If the task, a provider or a kind is not configured.
         """
         tasks = self._config.get("tasks", {})
         spec = tasks.get(task) or tasks.get("default")
         if spec is None:
             raise ConfigError(f"no model configured for task {task!r} and no default task")
-        name = spec["provider"]
+        entries = [(spec["provider"], spec.get("model"))] + [self._parse(e) for e in spec.get("fallback", [])]
+        return Route([self._candidate(*e) for e in entries], task, self._cooldown, self._on_fallback)
+
+    @staticmethod
+    def _parse(entry: str) -> tuple[str, Optional[str]]:
+        """Splits a fallback entry ``provider`` or ``provider:model`` at its first colon."""
+        name, _, model = entry.partition(":")
+        return name, model or None
+
+    def _candidate(self, name: str, model: Optional[str]) -> Candidate:
+        """Builds a candidate, using the provider's default model if none is given."""
         provider = self._provider(name)
-        return Route(provider, spec.get("model") or self._config["providers"][name]["model"])
+        return Candidate(name, provider, model or self._config["providers"][name]["model"])
 
     def _provider(self, name: str) -> LLMProvider:
         """Returns the provider with this name, building it the first time."""
