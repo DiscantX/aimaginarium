@@ -126,6 +126,17 @@ class ProviderFactory:
         entries = [(spec["provider"], spec.get("model"))] + [self._parse(e) for e in spec.get("fallback", [])]
         return Route([self._candidate(*e) for e in entries], task, self._cooldown, self._on_fallback)
 
+    def candidate(self, spec: str) -> Candidate:
+        """Builds a candidate from ``provider`` or ``provider:model``, outside any task's route.
+
+        Args:
+            spec: For example ``"gemini:gemma-4-31b-it"``.
+
+        Raises:
+            ConfigError: If the provider is not configured.
+        """
+        return self._candidate(*self._parse(spec))
+
     @staticmethod
     def _parse(entry: str) -> tuple[str, Optional[str]]:
         """Splits a fallback entry ``provider`` or ``provider:model`` at its first colon."""

@@ -24,3 +24,4 @@ aimaginarium.toml
 
 # Local game worlds
 worlds/
+compare_out/

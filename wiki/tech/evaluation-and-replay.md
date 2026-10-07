@@ -25,3 +25,8 @@
 - **[Open]** Where scenarios and recorded runs are stored, and whether they live in the repo.
 - **[Open]** Which metrics gate a change (for example, a schema failure rate) and which only inform.
 - **[Open]** Whether this is a separate tool or a mode of the engine itself.
+
+## Blind model comparison (built)
+
+`python -m aimaginarium.compare <provider:model> ... [--runs N] [--scenario opening|action|check_outcome] [--variant NAME]` runs the demo world's opening, a plain action and a check outcome through each model with the real prompt library, one call at a time. It writes `blind.md` (replies shuffled and labelled A, B, C per scenario and run), `key.json` (labels back to models) and `metrics.json` (strict schema validity, paragraph count, time to first token, latency, tokens, cached tokens, errors). Judge the prose in `blind.md` first; `--reveal` prints the per-model summary table. It uses the same prompt variants as the game, so it also compares prompt variants on one model by running it with `--variant`.
+
