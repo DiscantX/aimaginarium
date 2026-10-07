@@ -1,7 +1,7 @@
 """Live probe for the open provider questions.
 
-Run: python local_llm/tests/probe_llm.py ollama [model]
-     python local_llm/tests/probe_llm.py gemini <model> 500   (key in .env or the environment)
+Run: python local_llm/sample/probe_llm.py ollama [model]
+     python local_llm/sample/probe_llm.py gemini <model> 500   (key in .env or the environment)
 
 The last argument sets the cache test's prefix size (about 12 tokens per unit). Gemini's
 implicit cache needs roughly 4,096+ tokens, so use 500 there.

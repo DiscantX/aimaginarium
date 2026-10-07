@@ -29,7 +29,7 @@
 
 *Observed in the repository, not yet discussed, so recorded as facts and not decisions.*
 
-- `local_llm/` holds Ollama runner scripts (`run_ollama_optimized.ps1` and a `.bat`) and `local_llm/tests/sample-rpg-local.py`, a sample text-RPG test script.
+- `local_llm/` holds Ollama runner scripts (`run_ollama_optimized.ps1` and a `.bat`) and `local_llm/sample/sample-rpg-local.py`, a sample text-RPG test script.
 - `.gitignore` already excludes Qdrant local storage paths (`.qdrant_storage/`, `storage/`, `.qdrant-initialized`, `snapshots/`) and `.venv/`.
 
 **[Decided]** A local model (Ollama) is a candidate provider alongside Gemini and other API providers. The runner and sample are verified working with a manageable response time. **[Open]** Output quality is untested; see [evaluation and replay](evaluation-and-replay.md). **[Proposed]** The provider abstraction declares per-provider capabilities (schema enforcement, caching, tool calling) and uses validate-and-retry as the common floor. The sample uses Ollama's plain JSON mode (syntax only); whether the installed version accepts a full JSON schema needs verifying.
