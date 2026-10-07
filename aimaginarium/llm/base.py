@@ -7,6 +7,7 @@ system prompt and messages, because providers cache by prefix.
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import AsyncIterator, Literal, Optional, Union
@@ -108,12 +109,31 @@ class Usage:
             cannot report it.
         output_tokens: Tokens generated.
         latency: Seconds from request to the end of the reply.
+        time_to_first_token: Seconds from request to the first token chunk.
     """
 
     prompt_tokens: int = 0
     cached_tokens: Optional[int] = None
     output_tokens: int = 0
     latency: float = 0.0
+    time_to_first_token: Optional[float] = None
+
+
+class ResponseTimer:
+    """Measures request latency and time to first token."""
+
+    def __init__(self):
+        self.started = time.perf_counter()
+        self.time_to_first_token: Optional[float] = None
+
+    def record_chunk(self) -> None:
+        """Records the arrival of the first chunk if not already set."""
+        if self.time_to_first_token is None:
+            self.time_to_first_token = time.perf_counter() - self.started
+
+    def latency(self) -> float:
+        """Returns total elapsed time."""
+        return time.perf_counter() - self.started
 
 
 @dataclass(frozen=True)

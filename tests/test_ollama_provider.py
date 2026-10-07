@@ -41,6 +41,8 @@ def test_streams_chunks_then_response_with_usage():
     final = events[-1]
     assert isinstance(final, Response) and final.text == "Hello"
     assert (final.usage.prompt_tokens, final.usage.cached_tokens, final.usage.output_tokens) == (120, 100, 9)
+    assert final.usage.time_to_first_token is not None
+    assert final.usage.time_to_first_token >= 0
 
 
 def test_cached_tokens_none_when_server_omits_the_field():

@@ -17,7 +17,7 @@ except ImportError as exc:  # pragma: no cover - depends on the environment
     raise ImportError('The Gemini provider needs the SDK: pip install "aimaginarium[gemini]"') from exc
 
 from ..base import (
-    Capabilities, Chunk, LLMProvider, ProviderError, Request, Response, RetryableError, StreamEvent, Usage,
+    Capabilities, Chunk, LLMProvider, ProviderError, Request, Response, RetryableError, StreamEvent, Usage, ResponseTimer,
 )
 
 DEFAULT_CAPABILITIES = Capabilities(schema_enforcement=True, json_mode=True, reports_cache=True, tool_calling=True)
@@ -72,7 +72,7 @@ class GeminiProvider(LLMProvider):
             ProviderError: On other API errors, or if the model returns no text.
         """
         model = request.model or self.default_model
-        started = time.perf_counter()
+        timer = ResponseTimer()
         text: list[str] = []
         usage = None
         finish = None
@@ -85,6 +85,7 @@ class GeminiProvider(LLMProvider):
                 if chunk.candidates and chunk.candidates[0].finish_reason:
                     finish = chunk.candidates[0].finish_reason
                 if chunk.text:
+                    timer.record_chunk()
                     text.append(chunk.text)
                     yield Chunk(chunk.text)
         except errors.APIError as exc:
@@ -93,7 +94,7 @@ class GeminiProvider(LLMProvider):
             raise RetryableError(f"cannot reach Gemini: {exc}") from exc
         if not text:
             raise ProviderError(f"Gemini returned no text (finish reason: {finish})")
-        yield Response("".join(text), model, _usage(usage, time.perf_counter() - started))
+        yield Response("".join(text), model, _usage(usage, timer))
 
     def _build_config(self, request: Request, model: str) -> "types.GenerateContentConfig":
         """Builds the generation config for a request."""
@@ -117,15 +118,16 @@ def _contents(request: Request) -> list:
     return [types.Content(role=_ROLES[m.role], parts=[types.Part(text=m.content)]) for m in request.messages]
 
 
-def _usage(meta: Any, latency: float) -> Usage:
+def _usage(meta: Any, timer: ResponseTimer) -> Usage:
     """Builds :class:`Usage`; thinking tokens count as output because they take time and money."""
     if meta is None:
-        return Usage(latency=latency)
+        return Usage(latency=timer.latency(), time_to_first_token=timer.time_to_first_token)
     return Usage(
         prompt_tokens=meta.prompt_token_count or 0,
         cached_tokens=meta.cached_content_token_count or 0,
         output_tokens=(meta.candidates_token_count or 0) + (meta.thoughts_token_count or 0),
-        latency=latency,
+        latency=timer.latency(),
+        time_to_first_token=timer.time_to_first_token,
     )
 
 
