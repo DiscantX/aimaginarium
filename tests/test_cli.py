@@ -48,7 +48,7 @@ def test_check_shows_the_difficulty_and_pauses_for_the_roll():
 
 def test_rejected_changes_are_explained_without_stopping():
     changes = [{"op": "move", "entity": "item-99", "to": PLAYER_ID}]
-    _, text = run_session(fresh_game([reply(["Done."], changes)]), ["I take it.", "/quit"])
+    _, text = run_session(fresh_game([reply(["Done."], changes), '{"changes": []}']), ["I take it.", "/quit"])
     assert "were not accepted" in text and "world is unchanged" in text
 
 

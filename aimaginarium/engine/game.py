@@ -20,11 +20,13 @@ from typing import Any, AsyncIterator, Optional, Union
 
 from pydantic import BaseModel, ValidationError
 
-from ..llm import Chunk, Message, ProviderError, ProviderFactory, Request, Response, narration_events
+from ..llm import (
+    Chunk, Message, ProviderError, ProviderFactory, Request, Response, StructuredOutputError, narration_events,
+)
 from ..llm.structured import strip_fences
 from ..prompts import Prompt, PromptBuilder
 from ..world import ChangeError, CommitError, Event, Record, WorldStore
-from .replies import CheckRequest, OutcomeReply, TurnReply
+from .replies import CheckRequest, OutcomeReply, RepairReply, TurnReply
 from .rules import D20Rules, Roll
 from .view import render_state
 
@@ -61,6 +63,11 @@ class Committed:
 
 
 @dataclass(frozen=True)
+class Repairing:
+    """The proposed changes were rejected; the narrator is being asked to correct them."""
+
+
+@dataclass(frozen=True)
 class ChangesRejected:
     """The proposed changes failed validation; nothing was committed."""
 
@@ -74,7 +81,7 @@ class ReplyUnreadable:
     reason: str
 
 
-TurnEvent = Union[Narration, CheckCalled, Committed, ChangesRejected, ReplyUnreadable]
+TurnEvent = Union[Narration, CheckCalled, Committed, Repairing, ChangesRejected, ReplyUnreadable]
 
 
 @dataclass(frozen=True)
@@ -147,7 +154,7 @@ class Game:
                 yield item
         if reply is None:
             return
-        for event in self._commit(reply.parsed.changes, turn, []):
+        async for event in self._commit(reply.parsed.changes, turn, [], reply.narration):
             yield event
         self._remember("(The story begins.)", reply.narration)
 
@@ -182,7 +189,7 @@ class Game:
             return
         check: Optional[CheckRequest] = first.parsed.check
         if check is None:
-            for event in self._commit(first.parsed.changes, turn, [action.seq]):
+            async for event in self._commit(first.parsed.changes, turn, [action.seq], first.narration):
                 yield event
             self._remember(text, first.narration)
             return
@@ -204,7 +211,8 @@ class Game:
                 yield item
         if second is None:
             return
-        for event in self._commit(second.parsed.changes, turn, [rolled.seq]):
+        async for event in self._commit(second.parsed.changes, turn, [rolled.seq],
+                                        f"{first.narration}\n\n{second.narration}"):
             yield event
         self._remember(text, f"{first.narration}\n\n{second.narration}")
 
@@ -241,16 +249,62 @@ class Game:
 
     # -- committing --------------------------------------------------------
 
-    def _commit(self, changes: list[dict[str, Any]], turn: int, causes: list[int]) -> list[TurnEvent]:
-        """Validates and commits the proposed changes; a rejection leaves the world untouched."""
+    async def _commit(
+        self, changes: list[dict[str, Any]], turn: int, causes: list[int], narration: str
+    ) -> AsyncIterator[TurnEvent]:
+        """Commits the proposed changes; if the store rejects them, asks once for a correction.
+
+        A rejection writes nothing, so the world is never half-changed. The
+        correction is a second proposal for the same story event, checked the same way.
+        """
         if not changes:
-            return []
-        try:
-            return [Committed(self.store.commit(changes, actor=GM, turn=turn, causes=causes).events)]
-        except CommitError as exc:
+            return
+        result = self._try_commit(changes, turn, causes)
+        if isinstance(result, tuple):
+            yield Committed(result)
+            return
+        errors = result
+        self._record("changes.rejected", ENGINE, turn, {"errors": [asdict(e) for e in errors], "changes": changes}, causes)
+        yield Repairing()
+        fixed = await self._repair(changes, errors, narration, turn, causes)
+        if fixed:
+            result = self._try_commit(fixed, turn, causes)
+            if isinstance(result, tuple):
+                yield Committed(result)
+                return
             self._record("changes.rejected", ENGINE, turn,
-                         {"errors": [asdict(e) for e in exc.errors], "changes": changes}, causes)
-            return [ChangesRejected(tuple(exc.errors))]
+                         {"errors": [asdict(e) for e in result], "changes": fixed, "repaired": True}, causes)
+            errors = result
+        yield ChangesRejected(tuple(errors))
+
+    def _try_commit(
+        self, changes: list[dict[str, Any]], turn: int, causes: list[int]
+    ) -> Union[tuple[Event, ...], list[ChangeError]]:
+        """Returns the committed events (a tuple), or the errors (a list) if the store rejected the changes."""
+        try:
+            return self.store.commit(changes, actor=GM, turn=turn, causes=causes).events
+        except CommitError as exc:
+            return list(exc.errors)
+
+    async def _repair(
+        self, changes: list[dict[str, Any]], errors: list[ChangeError], narration: str, turn: int, causes: list[int]
+    ) -> Optional[list[dict[str, Any]]]:
+        """Asks the narrator for corrected changes; returns None if it cannot give any."""
+        values = {
+            **render_state(self.store, self.player_id),
+            "narration": narration,
+            "changes": json.dumps(changes, indent=2),
+            "errors": "\n".join(f"- change {e.index}: {e.message} ({e.code})" for e in errors),
+        }
+        prompt = self.prompts.build("repair", state=values)
+        try:
+            parsed, response = await self.llm.route(prompt.task).call(prompt.request(schema=RepairReply), RepairReply)
+        except (ProviderError, StructuredOutputError) as exc:
+            self._record("llm.failed", ENGINE, turn, {**prompt.record(), "error": str(exc)}, causes)
+            return None
+        self._record("llm.call", ENGINE, turn,
+                     {**prompt.record(), "model": response.model, "usage": asdict(response.usage)}, causes)
+        return parsed.changes
 
     def _record(self, kind: str, actor: str, turn: int, payload: dict[str, Any], causes: list[int],
                 entities: Optional[list[str]] = None) -> Event:

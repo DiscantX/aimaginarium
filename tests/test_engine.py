@@ -48,7 +48,7 @@ def test_request_has_stable_system_and_state_last(store):
     play(game.take_turn(PLAYER_ID, "I wait."))
     first, second = provider.requests
     assert first.system == second.system
-    assert "Marta" not in first.system and "Marta" in first.messages[-1].content
+    assert "wiping the same mug" not in first.system and "wiping the same mug" in first.messages[-1].content
     assert first.messages[-1].content.endswith("I look around.")
     assert [m.role for m in second.messages] == ["user", "assistant", "user"]
     assert second.messages[0].content == "I look around." and second.messages[1].content == "One."  # history holds no state
@@ -94,12 +94,47 @@ def test_critical_failure_selects_its_own_instruction(store):
     assert "critical failure" in provider.requests[1].messages[-1].content
 
 
-def test_rejected_changes_leave_the_world_untouched_and_are_logged(store):
-    game, _ = make_game(store, [reply(["You take the sword."], [{"op": "move", "entity": "item-99", "to": PLAYER_ID}])])
+BAD = [{"op": "move", "entity": "item-99", "to": PLAYER_ID}]
+GOOD = [{"op": "move", "entity": "item-3", "to": PLAYER_ID}]
+
+
+def repair(changes):
+    return json.dumps({"changes": changes})
+
+
+def test_rejected_changes_are_repaired_once_and_committed(store):
+    game, provider = make_game(store, [reply(["You take the key."], BAD), repair(GOOD)])
+    events = play(game.take_turn(PLAYER_ID, "I grab the key."))
+    assert [type(e).__name__ for e in events if not isinstance(e, Narration)] == ["Repairing", "Committed"]
+    assert store.get_entity("item-3").parent_id == PLAYER_ID
+    assert kinds(store, turn=1) == ["player.action", "llm.call", "changes.rejected", "llm.call", "entity.moved"]
+    request = provider.requests[1]
+    assert "item-99" in request.messages[-1].content and "You take the key." in request.messages[-1].content
+    assert "does not exist" in request.messages[-1].content and "Rusty key [item-3]" in request.messages[-1].content
+
+
+def test_a_repair_that_is_still_rejected_leaves_the_world_untouched(store):
+    game, _ = make_game(store, [reply(["You take it."], BAD), repair(BAD)])
     events = play(game.take_turn(PLAYER_ID, "I grab a sword."))
     assert isinstance(events[-1], ChangesRejected) and events[-1].errors[0].index == 0
-    assert "changes.rejected" in kinds(store)
+    assert kinds(store).count("changes.rejected") == 2
     assert store.get_entity("item-3").parent_id == "loc-1"
+
+
+def test_an_empty_or_failed_repair_reports_the_original_rejection(store):
+    game, _ = make_game(store, [reply(["One."], BAD), repair([])])
+    assert isinstance(play(game.take_turn(PLAYER_ID, "I try."))[-1], ChangesRejected)
+    game, _ = make_game(store, [reply(["Two."], BAD), ProviderUnavailableError("busy", attempts=1, waited=0)])
+    events = play(game.take_turn(PLAYER_ID, "I try again."))
+    assert isinstance(events[-1], ChangesRejected) and "llm.failed" in kinds(store)
+
+
+def test_repair_after_a_check_commits_with_the_roll_as_cause(store):
+    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+    game, _ = make_game(store, [reply(["You creep."], check=check), reply(["You take it."], BAD), repair(GOOD)])
+    play(game.take_turn(PLAYER_ID, "I sneak to the key."))
+    moved = store.events(kind="entity.moved")[-1]
+    assert [e.kind for e in store.causal_chain(moved.seq)] == ["player.action", "check.requested", "roll"]
 
 
 def test_unreadable_reply_is_reported_and_not_remembered(store):

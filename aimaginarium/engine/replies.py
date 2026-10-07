@@ -41,3 +41,13 @@ class OutcomeReply(BaseModel):
     """
 
     changes: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class RepairReply(BaseModel):
+    """A corrected set of changes, after the engine rejected a proposal.
+
+    Attributes:
+        changes: The corrected changes; empty if none should be made.
+    """
+
+    changes: list[dict[str, Any]] = Field(default_factory=list)

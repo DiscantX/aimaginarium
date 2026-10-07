@@ -1,0 +1,5 @@
+# Re-asks only for the state changes after the store rejected a proposal. No narration.
+id = "repair"
+task = "repair"
+system = ["core/role", "core/changes", "core/repair"]
+state = ["state/scene", "state/rejected"]
