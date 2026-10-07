@@ -31,6 +31,7 @@ from typing import Any, Callable, Mapping, Optional, Union
 
 from .factory import ConfigError, ProviderFactory
 from .retry import RetryNotice
+from .route import FallbackNotice
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -85,6 +86,7 @@ def factory_from_file(
     path: Union[str, Path, None] = None,
     env: Optional[Mapping[str, str]] = None,
     on_retry: Optional[Callable[[RetryNotice], None]] = None,
+    on_fallback: Optional[Callable[[FallbackNotice], None]] = None,
 ) -> ProviderFactory:
     """Builds a :class:`ProviderFactory` from a configuration file.
 
@@ -92,8 +94,9 @@ def factory_from_file(
         path: See :func:`find_config`.
         env: Environment to read keys from; defaults to ``os.environ``.
         on_retry: Called before each retry wait.
+        on_fallback: Called when a task moves on to its next candidate.
 
     Returns:
         The factory.
     """
-    return ProviderFactory(load_config(path), env=env, on_retry=on_retry)
+    return ProviderFactory(load_config(path), env=env, on_retry=on_retry, on_fallback=on_fallback)

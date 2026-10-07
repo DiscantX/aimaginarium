@@ -1,7 +1,7 @@
 # The second call of a check turn: narrate the result of the roll.
 id = "check_outcome"
 task = "check_outcome"
-system = ["core/role", "core/tenets", "style/prose"]
+system = ["core/role", "core/tenets", "style/prose", "core/changes", "core/after_roll"]
 state = ["state/scene", "state/roll", "outcome/{classification}"]
 
 [[plan]]

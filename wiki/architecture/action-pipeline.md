@@ -53,3 +53,21 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 ## Context assembly
 
 **[Proposed]** Each call includes a compact summary of the player's capabilities and the established properties of what they carry, so the LLM can recognize creative uses of items it was never planning for.
+
+## As built in the terminal prototype (#16)
+
+*Status tags do not apply: this records what the code does today.*
+
+`aimaginarium/engine/game.py` holds `Game`, a **temporary** in-process facade (`open_scene()`, `take_turn(actor, text)`), and `aimaginarium/cli.py` is the terminal client. Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
+
+A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The roll shown is die, modifier and total, never the difficulty.
+
+1. The player's input is logged (`player.action`, actor = the character).
+2. Call 1 (`narrate`) streams narration. The reply is lenient to parse: JSON that does not match the plan's paragraph count still works, because the plan is enforced by the provider's schema rather than by the engine. The call is logged (`llm.call`: recipe, variant, fragment hashes, model, usage including time to first token and cached tokens).
+3. No check: the proposed changes are validated and committed with actor `gm`, caused by the action.
+4. Check: `check.requested` is committed before the roll; changes in a check-bearing call 1 are not committed. The roll is logged (`roll`), then call 2 (`check_outcome`) is made with call 1's request and narration as its prefix, the outcome instruction chosen by the roll's classification, and its changes are committed with the roll as their cause.
+5. A rejected commit writes nothing but `changes.rejected` (errors and proposed changes) and tells the player; an unreadable reply or an unavailable provider writes `reply.invalid` or `llm.failed` and leaves the world unchanged.
+
+Rules are a minimal d20 stand-in (`D20Rules`): natural 1 and 20 are critical, a success by fewer than 3 is narrow. Skills come from `data.sheet.skills` on the character.
+
+**Not built yet** (each its own issue): the repair call for rejected changes (the narration the player saw can currently disagree with the world); persistent conversation history (it is in memory, so a restarted game continues without it); player-facing projections of facts (the narrator sees secrets, marked with who knows them); background commits while the player reads; any director other than the null one.

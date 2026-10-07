@@ -1,7 +1,7 @@
 # The first turn of a session: the narration plan shapes the structure of the story's opening.
 id = "opening"
 task = "opening"
-system = ["core/role", "core/tenets", "style/prose"]
+system = ["core/role", "core/tenets", "style/prose", "core/changes"]
 state = ["state/scene"]
 
 [[plan]]
