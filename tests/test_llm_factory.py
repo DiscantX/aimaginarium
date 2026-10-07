@@ -61,7 +61,7 @@ def test_ollama_provider_gets_its_settings():
                                       "options": {"num_thread": 2},
                                       "capabilities": {"phi4-mini": {"json_mode": True}}}},
               "tasks": {"default": {"provider": "local"}}}
-    provider = factory(config).route("x").provider
+    provider = factory(config).route("x").provider.inner
     assert provider.base_url == "http://box:11434" and provider.default_model == "phi4-mini"
     assert provider.capabilities() == Capabilities(json_mode=True)
 
@@ -75,3 +75,11 @@ def test_gemini_requires_its_key():
     renamed = {"providers": {"g": {"kind": "gemini", "model": "m", "api_key_env": "MY_KEY"}},
                "tasks": {"default": {"provider": "g"}}}
     assert factory(renamed, env={"MY_KEY": "k"}).route("x").model == "m"
+
+
+def test_providers_are_wrapped_with_the_configured_retry_policy():
+    config = {**CONFIG, "retry": {"attempts": 3, "max_total_wait": 10},
+              "providers": {**CONFIG["providers"], "small": {**CONFIG["providers"]["small"], "retry": {"attempts": 2}}}}
+    f = factory(config)
+    assert (f.route("narrate").provider.policy.attempts, f.route("narrate").provider.policy.max_total_wait) == (3, 10)
+    assert f.route("check").provider.policy.attempts == 2

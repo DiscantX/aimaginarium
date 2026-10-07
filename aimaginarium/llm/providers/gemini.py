@@ -132,4 +132,18 @@ def _usage(meta: Any, latency: float) -> Usage:
 def _api_error(exc: "errors.APIError") -> ProviderError:
     """Maps an SDK error to a retryable or permanent error."""
     message = f"Gemini returned {exc.code}: {getattr(exc, 'message', exc)}"
-    return RetryableError(message) if exc.code == 429 or (exc.code or 0) >= 500 else ProviderError(message)
+    if exc.code == 429 or (exc.code or 0) >= 500:
+        return RetryableError(message, retry_after=_retry_after(exc))
+    return ProviderError(message)
+
+
+def _retry_after(exc: "errors.APIError") -> Optional[float]:
+    """Reads the wait the server suggested (``RetryInfo.retryDelay``, such as ``"34s"``), if any."""
+    details = exc.details.get("error", {}).get("details", []) if isinstance(exc.details, dict) else []
+    for item in details:
+        if str(item.get("@type", "")).endswith("RetryInfo"):
+            try:
+                return float(str(item["retryDelay"]).rstrip("s"))
+            except (KeyError, ValueError):
+                return None
+    return None

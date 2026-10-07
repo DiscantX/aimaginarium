@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from aimaginarium.llm import Message, NarrationExtractor, Request, StructuredCaller
 from aimaginarium.llm.base import Response
-from aimaginarium.llm import LLMProvider
+from aimaginarium.llm import LLMProvider, RetryingProvider
 
 
 class Item(BaseModel):
@@ -42,9 +42,11 @@ def build(provider: str, model: str) -> LLMProvider:
     """Builds the provider under test; imports are lazy so only the chosen SDK is needed."""
     if provider == "gemini":
         from aimaginarium.llm.providers.gemini import GeminiProvider
-        return GeminiProvider(model)
-    from aimaginarium.llm.providers.ollama import OllamaProvider
-    return OllamaProvider(model, options={"num_ctx": 8192, "num_thread": 2})
+        inner = GeminiProvider(model)
+    else:
+        from aimaginarium.llm.providers.ollama import OllamaProvider
+        inner = OllamaProvider(model, options={"num_ctx": 8192, "num_thread": 2})
+    return RetryingProvider(inner, on_retry=lambda n: print(f"   busy ({n.error}); retrying in {n.delay:.0f}s"))
 
 
 async def main(provider: str, model: str, repeats: int) -> None:

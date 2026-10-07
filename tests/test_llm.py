@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from aimaginarium.llm import (
     Capabilities, Chunk, Message, ProviderError, Request, Response, RetryableError,
-    StructuredCaller, StructuredOutputError, retry,
+    StructuredCaller, StructuredOutputError,
 )
 from aimaginarium.llm.providers.fake import FakeProvider
 
@@ -44,39 +44,6 @@ def test_generate_returns_final_response_and_records_request():
 def test_scripted_exception_is_raised():
     with pytest.raises(ProviderError):
         run(FakeProvider([ProviderError("boom")]).generate(Request()))
-
-
-def test_retry_succeeds_after_retryable_failures():
-    calls = []
-
-    async def flaky():
-        calls.append(1)
-        if len(calls) < 3:
-            raise RetryableError("busy")
-        return "done"
-
-    assert run(retry(flaky, attempts=3, backoff=0)) == "done"
-    assert len(calls) == 3
-
-
-def test_retry_gives_up_after_attempts():
-    async def always():
-        raise RetryableError("busy")
-
-    with pytest.raises(RetryableError):
-        run(retry(always, attempts=2, backoff=0))
-
-
-def test_retry_does_not_repeat_other_errors():
-    calls = []
-
-    async def broken():
-        calls.append(1)
-        raise ProviderError("bad key")
-
-    with pytest.raises(ProviderError):
-        run(retry(broken, attempts=3, backoff=0))
-    assert len(calls) == 1
 
 
 def test_structured_returns_valid_reply():

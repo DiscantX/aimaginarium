@@ -21,7 +21,32 @@ class ProviderError(Exception):
 
 
 class RetryableError(ProviderError):
-    """A provider call failed in a way that may succeed if repeated (timeout, rate limit)."""
+    """A provider call failed in a way that may succeed if repeated (timeout, rate limit, busy).
+
+    Attributes:
+        retry_after: Seconds the server asked us to wait, if it said.
+    """
+
+    def __init__(self, message: str, retry_after: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class ProviderUnavailableError(ProviderError):
+    """Retrying was given up because the provider stayed unavailable for too long.
+
+    Nothing was committed to the world, so the caller can safely try another
+    provider, tell the player, or try again later.
+
+    Attributes:
+        attempts: Calls made.
+        waited: Seconds spent waiting between attempts.
+    """
+
+    def __init__(self, message: str, attempts: int, waited: float):
+        super().__init__(message)
+        self.attempts = attempts
+        self.waited = waited
 
 
 @dataclass(frozen=True)

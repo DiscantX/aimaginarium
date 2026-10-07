@@ -63,6 +63,16 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Decided]** The provider switches off the SDK's automatic function-calling loop (the engine executes tool calls, not the SDK).
 
+## Retries and outages
+
+**[Decided]** Busy responses (Gemini 503 and 429, timeouts, connection errors) are common, so every provider the factory builds is wrapped in `RetryingProvider`. A call is retried with exponential backoff and jitter only if it failed before any text reached the caller. When the server states how long to wait (Gemini's `RetryInfo`), that wait is used.
+
+**[Proposed]** `RetryPolicy` defaults: 6 attempts, 1 s doubling to at most 20 s per wait, 45 s in total. Past those limits, or if the server asks for more than the per-wait limit, the wrapper raises `ProviderUnavailableError` (with the attempts and time waited) and does not wait further. A client can show progress through the `on_retry` callback. The `retry` config key overrides the policy globally or per provider.
+
+**[Proposed]** Nothing has been committed to the world when a call fails, because changes commit only after a validated reply, so giving up is safe. What to do next is the engine's decision, in this order of preference: (1) fall back to the next provider or model configured for the task (for example flash-lite, then flash, then a local model); (2) keep the player's action pending, tell them the storyteller is busy, and offer to retry; (3) for background work such as world ticks, requeue with a longer window.
+
+**[Open]** A free-tier daily quota error is a 429 that backoff cannot fix. It is handled only if the server's suggested wait exceeds the per-wait limit; whether Gemini sends one for daily quotas is unverified. A failure after narration has started streaming is not retried; the engine decides (for example a repair call for the changes only).
+
 ## Configuration
 
 **[Proposed]** `ProviderFactory` takes a plain mapping: named `providers` (kind, default model, kind-specific settings such as `options` or `config`, optional per-model `capabilities`) and `tasks` (task name to provider and optional model, with a `default` task). `factory.route("narrate")` returns the provider and model for a task, so different tasks can use different models (a small model for the check ruling, the strongest for narration). API keys are never in the mapping: each provider names the environment variable that holds its key (default `GEMINI_API_KEY`), loaded from `.env`, which is git-ignored. **[Open]** The file format that produces the mapping (TOML suggested) is left to the application layer (#16).

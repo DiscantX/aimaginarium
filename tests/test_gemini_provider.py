@@ -115,3 +115,18 @@ def test_no_text_is_an_error():
     gemini, _ = provider(chunks=[chunk(None, finish=types.FinishReason.SAFETY)])
     with pytest.raises(ProviderError, match="SAFETY"):
         run_stream(gemini, Request())
+
+
+def test_server_suggested_wait_is_passed_on():
+    info = {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "34s"}
+    gemini, _ = provider(error=errors.ClientError(429, {"error": {"code": 429, "message": "slow down", "details": [info]}}))
+    with pytest.raises(RetryableError) as caught:
+        run_stream(gemini, Request())
+    assert caught.value.retry_after == 34.0
+
+
+def test_no_suggested_wait_when_the_server_gives_none():
+    gemini, _ = provider(error=errors.ServerError(503, {"error": {"code": 503, "message": "overloaded"}}))
+    with pytest.raises(RetryableError) as caught:
+        run_stream(gemini, Request())
+    assert caught.value.retry_after is None

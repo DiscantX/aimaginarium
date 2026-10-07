@@ -26,6 +26,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, Optional
 
 from .base import Capabilities, LLMProvider, Request
+from .retry import RetryingProvider, RetryNotice, RetryPolicy
 
 Builder = Callable[[Mapping[str, Any], Mapping[str, str]], LLMProvider]
 
@@ -87,6 +88,7 @@ class ProviderFactory:
         config: Mapping[str, Any],
         env: Optional[Mapping[str, str]] = None,
         builders: Optional[Mapping[str, Builder]] = None,
+        on_retry: Optional[Callable[[RetryNotice], None]] = None,
     ):
         """Initialises the factory.
 
@@ -95,10 +97,16 @@ class ProviderFactory:
                 ``{"provider": ..., "model": ...}``; ``model`` is optional).
             env: Environment to read keys from; defaults to ``os.environ``.
             builders: Extra provider kinds, as ``kind -> builder(spec, env)``.
+            on_retry: Called before each retry wait, so a client can tell the player.
+
+        Every provider is wrapped in :class:`RetryingProvider`. The optional ``retry``
+        mapping (top level, or inside a provider spec to override it) sets the
+        :class:`RetryPolicy` fields.
         """
         self._config = config
         self._env = os.environ if env is None else env
         self._builders: dict[str, Builder] = {"ollama": _build_ollama, "gemini": _build_gemini, **(builders or {})}
+        self._on_retry = on_retry
         self._providers: dict[str, LLMProvider] = {}
 
     def route(self, task: str) -> Route:
@@ -130,5 +138,6 @@ class ProviderFactory:
             builder = self._builders.get(spec.get("kind"))
             if builder is None:
                 raise ConfigError(f"provider {name!r} has unknown kind {spec.get('kind')!r}")
-            self._providers[name] = builder(spec, self._env)
+            policy = RetryPolicy(**{**self._config.get("retry", {}), **spec.get("retry", {})})
+            self._providers[name] = RetryingProvider(builder(spec, self._env), policy, self._on_retry)
         return self._providers[name]
