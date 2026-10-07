@@ -4,7 +4,7 @@ import asyncio
 import io
 import time
 
-from aimaginarium.spinner import Spinner
+from aimaginarium.ui.utils.spinner import Spinner
 
 
 def test_spinner_sync_context_manager():

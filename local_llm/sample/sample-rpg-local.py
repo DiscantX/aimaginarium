@@ -2,6 +2,9 @@ import json
 import ollama
 import sys
 import time
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from aimaginarium.ui.utils.spinner import Spinner as RPGNarrativeLoader
 from rpg_logger import RPGLogger  # 📥 Import your modular logger
 
 # Game configuration constraints
@@ -26,40 +29,6 @@ game_state = {
 
 logger = RPGLogger(verbose=VERBOSE_LOGGING)
 logger.log_settings(MODEL_NAME, NUM_CTX, TEMPERATURE, NUM_THREAD)
-
-# (Keep your original RPGNarrativeLoader class completely unchanged here)
-class RPGNarrativeLoader:
-    def __init__(self):
-        self.spin_symbols = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        self.playful_messages = ["Consulting the dark oracle...", "Rolling hidden 20-sided dice..."]
-        import threading
-        self._stop_event = threading.Event()
-        self._thread = None
-    def _animate(self):
-        import random
-        msg = random.choice(self.playful_messages)
-        symbol_idx = 0
-        while not self._stop_event.is_set():
-            symbol = self.spin_symbols[symbol_idx % len(self.spin_symbols)]
-            sys.stdout.write(f"\r\033[K \033[35m{symbol}\033[0m {msg}")
-            sys.stdout.flush()
-            symbol_idx += 1
-            time.sleep(0.08)
-    def __enter__(self):
-        import threading
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._animate, daemon=True)
-        self._thread.start()
-        return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.stop()
-    def stop(self):
-        if not self._stop_event.is_set():
-            self._stop_event.set()
-            if self._thread:
-                self._thread.join()
-            sys.stdout.write("\r\033[K")
-            sys.stdout.flush()
 
 
 def preload_model():

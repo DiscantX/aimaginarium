@@ -22,7 +22,7 @@ from .engine import (
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
-from .spinner import Spinner
+from .ui.utils.spinner import Spinner
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
