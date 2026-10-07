@@ -34,3 +34,11 @@ def test_spinner_async_context_manager():
 
     output = asyncio.run(go())
     assert "Asynctest..." in output
+
+
+def test_stop_clears_the_line_and_resets_colours():
+    stream = io.StringIO()
+    spinner = Spinner(messages=["x"], interval=0.01, stream=stream).start()
+    time.sleep(0.03)
+    spinner.stop()
+    assert stream.getvalue().endswith("\r\033[K\033[0m")
