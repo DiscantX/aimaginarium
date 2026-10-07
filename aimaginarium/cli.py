@@ -22,7 +22,7 @@ from .engine import (
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
-from .ui.utils import Spinner, format_assistant_message
+from .ui.utils import Spinner, format_assistant_message, colorize
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
@@ -66,15 +66,15 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
                     out(format_assistant_message("".join(chunks)), end="")
                     chunks.clear()
                 out()
-                await ask(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ")
+                await ask(colorize(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ", "muted"))
                 roll = event.roll
-                out(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n")
+                out(colorize(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n", "muted"))
                 spinner.start()
                 first = True
             elif isinstance(event, ChangesRejected):
-                out(f"\n\n[Some changes were not accepted: {event.errors[0].message}. The world is unchanged.]", end="")
+                out(colorize(f"\n\n[Some changes were not accepted: {event.errors[0].message}. The world is unchanged.]", "muted"), end="")
             elif isinstance(event, ReplyUnreadable):
-                out(f"\n\n[{event.reason}]", end="")
+                out(colorize(f"\n\n[{event.reason}]", "muted"), end="")
     finally:
         spinner.stop()
         if chunks:
@@ -91,18 +91,18 @@ async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool
         out: Writes text.
         opening: Whether to narrate the opening scene first.
     """
-    out("Type what you do. /state shows what the narrator sees, /quit leaves.\n")
+    out(colorize("Type what you do. /state shows what the narrator sees, /quit leaves.\n", "muted"))
     if opening:
         await render_turn(game.open_scene(), ask, out)
     else:
         for msg in game._history:
             if msg.role == "user":
-                out(f"> {msg.content}")
+                out(colorize(f"> {msg.content}", "player"))
             elif msg.role == "assistant":
                 out(format_assistant_message(msg.content), end="")
     while True:
         try:
-            text = (await ask("> ")).strip()
+            text = (await ask(colorize("> ", "player"))).strip()
         except (EOFError, KeyboardInterrupt):
             break
         if text in ("/quit", "/exit"):

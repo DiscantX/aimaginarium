@@ -26,13 +26,37 @@ COLORS: dict[str, str] = {
     "bright_cyan": "\033[96m",
     "bright_white": "\033[97m",
 }
+# # Original style -- too dark, don't use
+# DEFAULT_STYLES: dict[str, str] = {
+#     "narration": "dim",
+#     "indicator": "magenta",
+#     "player": "green",
+#     "muted": "bright_black",
+# }
 
+# # Classic Roguelike
+# DEFAULT_STYLES: dict[str, str] = {
+#     "narration": "bright_white",  # High contrast, clean narrative text
+#     "indicator": "bright_yellow", # For prompt anchors like > or [Choice]
+#     "player": "green",            # What the player types stays distinct
+#     "muted": "dim",               # Keeps system logs/meta-text quiet
+# }
+
+# Arcane Spellbook
 DEFAULT_STYLES: dict[str, str] = {
-    "narration": "dim",
-    "indicator": "magenta",
-    "player": "green",
-    "muted": "bright_black",
+    "narration": "white",          # Soft white (slightly dimmer than bright_white)
+    "indicator": "bright_cyan",    # High visibility magic prompts
+    "player": "bright_magenta",    # Elegant, mystic player input color
+    "muted": "bright_black",       # Perfect "dark gray" for hidden details
 }
+
+# # Grim & Perilous
+# DEFAULT_STYLES: dict[str, str] = {
+#     "narration": "bright_white",   # Pure clarity for environmental layout
+#     "indicator": "bright_red",     # Threat indicators or combat prompts
+#     "player": "yellow",            # Warm torchlight color for active input
+#     "muted": "dim",                # Blends secondary info away
+# }
 
 
 class Stylesheet:

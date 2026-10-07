@@ -1,6 +1,7 @@
 """Tests for the terminal client, with scripted input and output."""
 
 import asyncio
+import re
 
 from aimaginarium.cli import main, play
 from engine_helpers import make_game, reply
@@ -14,7 +15,8 @@ def run_session(game, inputs, opening=False):
     lines = iter(inputs)
 
     async def ask(prompt):
-        asked.append(prompt)
+        plain = re.sub(r'\033\[[0-9;]*m', '', prompt)
+        asked.append(plain)
         try:
             return next(lines)
         except StopIteration:
