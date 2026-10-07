@@ -22,6 +22,7 @@ from .engine import (
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
+from .spinner import Spinner
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
@@ -49,18 +50,29 @@ async def render_turn(events, ask: Ask, out: Show) -> None:
         ask: Reads a line from the player.
         out: Writes text.
     """
-    async for event in events:
-        if isinstance(event, Narration):
-            out(event.text, end="")
-        elif isinstance(event, CheckCalled):
-            out()
-            await ask(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ")
-            roll = event.roll
-            out(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n")
-        elif isinstance(event, ChangesRejected):
-            out(f"\n\n[Some changes were not accepted: {event.errors[0].message}. The world is unchanged.]", end="")
-        elif isinstance(event, ReplyUnreadable):
-            out(f"\n\n[{event.reason}]", end="")
+    spinner = Spinner()
+    spinner.start()
+    first = True
+    try:
+        async for event in events:
+            if first:
+                spinner.stop()
+                first = False
+            if isinstance(event, Narration):
+                out(event.text, end="")
+            elif isinstance(event, CheckCalled):
+                out()
+                await ask(f"\n[{event.roll.skill.title()} check] Press Enter to roll... ")
+                roll = event.roll
+                out(f"You rolled {roll.die} {roll.modifier:+d} = {roll.total}.\n")
+                spinner.start()
+                first = True
+            elif isinstance(event, ChangesRejected):
+                out(f"\n\n[Some changes were not accepted: {event.errors[0].message}. The world is unchanged.]", end="")
+            elif isinstance(event, ReplyUnreadable):
+                out(f"\n\n[{event.reason}]", end="")
+    finally:
+        spinner.stop()
     out("\n")
 
 
