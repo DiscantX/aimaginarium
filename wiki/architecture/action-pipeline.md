@@ -61,7 +61,7 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 *Status tags do not apply: this records what the code does today.*
 
-`aimaginarium/engine/game.py` holds `Game`, a **temporary** in-process facade (`open_scene()`, `take_turn(actor, text)`), and `aimaginarium/cli.py` is the terminal client. Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
+`aimaginarium/engine/game.py` holds `Game` (`open_scene()`, `take_turn(actor, text)`, `resolve_check()`); a turn that calls a check ends at `CheckCalled` and `resolve_check()` continues it. Clients do not call `Game`: `aimaginarium/api/local.py` serves it through the API contract, and `aimaginarium/cli.py` is the terminal client, a player-role session on that server (`--dev` connects with the dev role). Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
 
 A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The check prompt shows the difficulty (`[Stealth check, difficulty 12]`), the number the total must meet; the roll shown afterwards is die, modifier and total. **[Decided]** The player sees the difficulty. A natural 1 or 20 is critical whatever the total.
 

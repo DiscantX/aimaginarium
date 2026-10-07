@@ -7,6 +7,8 @@ not learn. (Player-facing projections are a later layer.)
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..world import Entity, Fact, WorldStore
 
 
@@ -58,3 +60,39 @@ def render_state(store: WorldStore, player_id: str) -> dict[str, str]:
     if known:
         character.append("Secrets the character knows: " + "; ".join(f.text for f in known))
     return {"world_state": "\n".join(lines), "character": "\n".join(character)}
+
+
+def _known(entity: Entity, player_id: str) -> list[str]:
+    """Returns the facts about an entity that the player's character may know."""
+    return [f.text for f in entity.established if f.known_by is None or player_id in f.known_by]
+
+
+def _seen(entity: Entity, player_id: str) -> dict[str, Any]:
+    """Describes an entity by what the player can perceive: no ids, no hidden facts."""
+    return {"name": entity.name, "kind": entity.kind, "description": entity.data.get("description", ""),
+            "facts": _known(entity, player_id)}
+
+
+def render_player_view(store: WorldStore, player_id: str) -> dict[str, Any]:
+    """Describes the world as the player's character can know it (a projection).
+
+    Unlike :func:`render_state`, this never includes entity ids, secrets the
+    character does not know, or anything the GM alone knows.
+
+    Args:
+        store: The world.
+        player_id: The player character's entity id.
+
+    Returns:
+        ``location``, ``exits``, ``here``, ``character`` and ``carrying``.
+    """
+    player = store.get_entity(player_id)
+    location_id = store.location_of(player_id)
+    view: dict[str, Any] = {"location": None, "exits": [], "here": []}
+    if location_id:
+        view["location"] = _seen(store.get_entity(location_id), player_id)
+        view["exits"] = [{"to": store.get_entity(c["to_id"]).name, "label": c["label"]} for c in store.connections(location_id)]
+        view["here"] = [_seen(e, player_id) for e in store.children(location_id) if e.id != player_id]
+    view["character"] = {**_seen(player, player_id), "skills": dict(player.data.get("sheet", {}).get("skills", {}))}
+    view["carrying"] = [_seen(e, player_id) for e in store.children(player_id)]
+    return view

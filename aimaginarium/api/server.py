@@ -1,9 +1,8 @@
 """The server and session protocols that every client programs against.
 
-#56 defines only the contract. The in-process implementation (#57) replaces the
-temporary :class:`~aimaginarium.engine.Game` facade, the terminal client moves
-onto it, and later the Textual UI, the MCP servers and the web client use the
-same two protocols.
+These are the contract every client programs against. :class:`~.local.LocalServer`
+is the in-process implementation the terminal client uses; the Textual UI, the MCP
+servers and the web client will use the same two protocols.
 
 A turn that calls for a check spans two replies: ``send(SubmitAction)`` ends
 with ``Done(awaiting_roll=True)``, and ``send(Roll)`` continues it. There is no

@@ -6,7 +6,7 @@
 
 **[Decided]** Clients (terminal, Textual, web, MCP) call the internal API, which calls the engine; the engine alone uses the world store, ruleset, prompt library and LLM gateway. Clients never see a provider; `LLMProvider` is internal to the server.
 
-**[Decided]** For the terminal prototype (#16) there is no API layer yet, only a small in-process facade (for example `Game.take_turn(actor, text)`). It must be commented as **temporary**; it is the boundary the API and MCP wrappers will later expose.
+**[Decided]** The terminal prototype (#16) first used a small in-process facade (`Game.take_turn(actor, text)`) with no API layer. That facade is gone: since #57 the terminal talks to the in-process server in `aimaginarium/api/local.py`, which is the boundary the MCP wrappers will expose.
 
 ## Package layout
 

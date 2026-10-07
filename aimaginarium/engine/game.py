@@ -1,15 +1,11 @@
-"""The game facade used by the terminal client.
+"""The game: turns, checks and commits, on top of the world store and the LLM gateway.
 
-TEMPORARY: this in-process class stands in for the internal API (see
-wiki/tech/llm-gateway.md, "Layering"). Clients will talk to a real API layer
-that calls the engine; until it exists, the terminal calls :class:`Game`
-directly. Keep its surface small (``open_scene``, ``take_turn``), because that
-is the boundary the API and the MCP servers will expose.
+Clients do not call :class:`Game` directly; they talk to a server from
+:mod:`aimaginarium.api`, which turns the engine events below into API events.
 
-A turn is a stream of events. The client waits for the player by not asking
-for the next event: after :class:`CheckCalled` the generator is suspended
-until the client resumes it, which it does once the player has pressed the
-roll button.
+A turn is a stream of events. A check splits it in two: ``take_turn`` ends
+with :class:`CheckCalled` and the game waits (:attr:`Game.awaiting_roll`) until
+:meth:`Game.resolve_check` is called, which reveals the roll and plays the rest.
 """
 
 from __future__ import annotations
@@ -43,12 +39,11 @@ class Narration:
 
 @dataclass(frozen=True)
 class CheckCalled:
-    """A dice check was called for; the client lets the player roll, then resumes.
+    """A dice check was called for; the turn pauses until :meth:`Game.resolve_check`.
 
     Attributes:
-        roll: The precomputed roll. The client shows the difficulty with the
-            prompt, then ``die``, ``modifier`` and ``total`` when the player
-            presses the button.
+        roll: The precomputed roll. Clients show only the difficulty until
+            :class:`Rolled` reveals the numbers.
         reason: Why the check matters.
         ruling: How the difficulty was worked out (tier and factors), for
             clients that show their workings, such as a developer panel.
@@ -57,6 +52,13 @@ class CheckCalled:
     roll: Roll
     reason: str
     ruling: Ruling
+
+
+@dataclass(frozen=True)
+class Rolled:
+    """The player rolled for the pending check; ``roll`` is now revealed."""
+
+    roll: Roll
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,21 @@ class ReplyUnreadable:
     reason: str
 
 
-TurnEvent = Union[Narration, CheckCalled, Committed, Repairing, ChangesRejected, ReplyUnreadable]
+TurnEvent = Union[Narration, CheckCalled, Rolled, Committed, Repairing, ChangesRejected, ReplyUnreadable]
+
+
+@dataclass(frozen=True)
+class _Pending:
+    """Internal: a turn paused at a check, waiting for the player's roll."""
+
+    turn: int
+    text: str
+    state: dict[str, str]
+    request: Request
+    first: "_Reply"
+    check: CheckRequest
+    requested: Event
+    roll: Roll
 
 
 @dataclass(frozen=True)
@@ -98,7 +114,7 @@ class _Reply:
 
 
 class Game:
-    """One player's game in one world. TEMPORARY facade, see the module docstring."""
+    """One player's game in one world."""
 
     def __init__(
         self,
@@ -124,6 +140,23 @@ class Game:
         self.rules = rules or D20Rules()
         self.history_limit = history_limit
         self._history: list[Message] = self._load_history()
+        self._pending: Optional[_Pending] = None
+        self.turn_id: Optional[int] = None
+
+    @property
+    def awaiting_roll(self) -> bool:
+        """Whether a check has been called and is waiting for :meth:`resolve_check`."""
+        return self._pending is not None
+
+    @property
+    def begun(self) -> bool:
+        """Whether the story has already been opened."""
+        return bool(self.store.events(kind="llm.call"))
+
+    @property
+    def history(self) -> list[Message]:
+        """The conversation so far: the player's words and the narration, oldest first."""
+        return list(self._history)
 
     def _load_history(self) -> list[Message]:
         """Loads past conversation history from the store's event log."""
@@ -147,7 +180,7 @@ class Game:
 
     async def open_scene(self) -> AsyncIterator[TurnEvent]:
         """Narrates the opening of the story (call this once, before the first turn)."""
-        turn = self.store.new_turn()
+        turn = self.turn_id = self.store.new_turn()
         prompt = self.prompts.build("opening", state=render_state(self.store, self.player_id))
         request = prompt.request(schema=TurnReply)
         reply = None
@@ -170,15 +203,19 @@ class Game:
             text: What the player does or says.
 
         Yields:
-            Narration as it streams, a :class:`CheckCalled` if a roll is needed
-            (resume to continue), then the commit result.
+            Narration as it streams, then either the commit result or, if a roll
+            is needed, a :class:`CheckCalled` that ends the stream. Call
+            :meth:`resolve_check` to continue.
 
         Raises:
             ValueError: If ``actor`` is not the player's character.
+            RuntimeError: If a check is still waiting for its roll.
         """
         if actor != self.player_id:
             raise ValueError(f"{actor!r} is not the player's character")
-        turn = self.store.new_turn()
+        if self._pending:
+            raise RuntimeError("a check is waiting for its roll")
+        turn = self.turn_id = self.store.new_turn()
         action = self._record("player.action", actor, turn, {"text": text}, [], [actor])
         state = render_state(self.store, self.player_id)
         prompt = self.prompts.build("narrate", state=state)
@@ -202,12 +239,29 @@ class Game:
         requested = self._record("check.requested", GM, turn, {**check.model_dump(), **ruling.as_payload()},
                                  [action.seq], [actor])
         roll = self.rules.roll(self.store.get_entity(actor), check.skill, ruling.difficulty)
+        self._pending = _Pending(turn, text, state, request, first, check, requested, roll)
         yield CheckCalled(roll, check.reason, ruling)
-        rolled = self._record("roll", actor, turn, asdict(roll), [requested.seq], [actor])
 
-        outcome = self.prompts.build("check_outcome", state={**state, **self._roll_state(roll, check)})
+    async def resolve_check(self) -> AsyncIterator[TurnEvent]:
+        """Reveals the pending roll and plays the rest of the turn.
+
+        Yields:
+            :class:`Rolled`, then narration as it streams, then the commit result.
+
+        Raises:
+            RuntimeError: If no check is waiting.
+        """
+        if self._pending is None:
+            raise RuntimeError("no check is waiting for a roll")
+        pending, self._pending = self._pending, None
+        turn, roll, check, first = pending.turn, pending.roll, pending.check, pending.first
+        self.turn_id = turn
+        rolled = self._record("roll", self.player_id, turn, asdict(roll), [pending.requested.seq], [self.player_id])
+        yield Rolled(roll)
+
+        outcome = self.prompts.build("check_outcome", state={**pending.state, **self._roll_state(roll, check)})
         followup = outcome.request(
-            [*request.messages, Message("assistant", first.narration)], schema=OutcomeReply
+            [*pending.request.messages, Message("assistant", first.narration)], schema=OutcomeReply
         )
         second = None
         async for item in self._call(outcome, followup, OutcomeReply, turn, [rolled.seq]):
@@ -217,10 +271,10 @@ class Game:
                 yield item
         if second is None:
             return
-        async for event in self._commit(second.parsed.changes, turn, [rolled.seq],
-                                        f"{first.narration}\n\n{second.narration}"):
+        story = f"{first.narration}\n\n{second.narration}"
+        async for event in self._commit(second.parsed.changes, turn, [rolled.seq], story):
             yield event
-        self._remember(text, f"{first.narration}\n\n{second.narration}")
+        self._remember(pending.text, story)
 
     # -- calling the model -----------------------------------------------
 
