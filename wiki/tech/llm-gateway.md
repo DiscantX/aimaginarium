@@ -53,11 +53,17 @@ Dependencies point one way: `llm/` knows nothing about the game, `prompts/` buil
 
 **[Open]** Whether Gemini accepts schemas with free-form `dict` fields.
 
+## Gemini
+
+**[Decided]** Use Google's official `google-genai` SDK (an optional extra, `aimaginarium[gemini]`), behind `LLMProvider`, so it can be replaced without touching the engine. Unlike the Ollama SDK, it is the first-party reference client; it exposes async streaming, `cached_content_token_count`, thinking tokens and full JSON schemas (`response_json_schema`). Thinking tokens are counted as output tokens in `Usage`. Extra generation config (for example a thinking budget) is passed through the provider's `config` dict.
+
+**[Open]** Needs a live key to confirm: that nested models and free-form `dict` fields are accepted, that cached tokens are reported for a repeated prefix, and that key order is preserved so the narration streams first. Run `local_llm/tests/probe_llm.py gemini <model>`.
+
 ## Prompt layout and cost (measured)
 
 **[Verified]** Local timings (phi4-mini, CPU, October 2026): time to first token grew linearly with input size at about 0.1 s per prompt token in every run (40 s at 339 tokens, 158 s at 1,472), so the prompt was being re-evaluated almost in full each turn. The sample script put the changing world state inside the system prompt; any change there invalidates the cache from that point on (its logs showed only 129 and 159 tokens reused). Rule: **stable content first; volatile state last** (in the final user message, after history).
 
-**[Verified]** Generation slowed as context grew (about 2.1 to 1.4 words per second from turn 1 to 5), so prompt size matters beyond caching. A 32,768-token context cost about 4x the model load time (142 s vs 33 s) but no per-turn time at these sizes; `q8_0` KV cache gave no speed benefit at 2,048 tokens (prefill looked 20 to 40 percent slower in single runs). Long-context behaviour is untested.
+**[Verified]** Generation slowed as context grew (about 2.1 to 1.4 words per second from turn 1 to 5), so prompt size matters beyond caching. A 32,768-token context cost about 4x the model load time (142 s vs 33 s) but no per-turn time at these sizes; `q8_0` KV cache gave no speed benefit at 2,048 tokens (with flash attention confirmed on, prefill looked 20 to 40 percent slower in single runs). Long-context behaviour is untested.
 
 **[Decided]** Ollama options (`num_ctx`, `num_thread`, ...) are passed through the provider's `options` dict.
 
