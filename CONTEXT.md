@@ -12,7 +12,7 @@ An engine for D&D-style tabletop RPGs in which an LLM acts as dungeon master/orc
 
 ## Status
 
-Planning phase, no engine code yet. Storytelling lenses 1 to 4 are drafted (remaining: interactive-narrative literature, tabletop GM craft, LLM failure modes). Architecture and tech stack are drafted from discussion. See `wiki/open-questions.md`.
+Early build. Storytelling essays are done, architecture and tech stack are drafted, and the prototype foundations are merged: SRD loader, SQLite world store with event log, and the LLM gateway (providers for Gemini and Ollama, retry, structured output, TOML config). Next: the prompt library and the first terminal loop (#16). Open items are in `wiki/open-questions.md`.
 
 ## Tenets (do not violate)
 
@@ -32,7 +32,9 @@ Statements are tagged **[Decided]** (Ficus stated or accepted), **[Proposed]** (
 - `wiki/story/`: storytelling essays
 - `wiki/architecture/`: core engine, action pipeline, time and knowledge, multiplayer and API
 - `wiki/tech/`: tech stack
-- `local_llm/`: existing Ollama runner scripts and a sample text-RPG test
+- `aimaginarium/`: the engine package (`srd/`, `world/`, `llm/`)
+- `tests/`: the automated test suite
+- `local_llm/`: Ollama runner scripts and sample scripts (`sample/`), not part of the suite
 
 ## Working agreement
 
