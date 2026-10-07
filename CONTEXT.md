@@ -12,7 +12,7 @@ An engine for D&D-style tabletop RPGs in which an LLM acts as dungeon master/orc
 
 ## Status
 
-Early build. Storytelling essays are done, architecture and tech stack are drafted, and the prototype foundations are merged: SRD loader, SQLite world store with event log, and the LLM gateway (providers for Gemini and Ollama, retry, structured output, TOML config). The prompt library and a first playable terminal loop (`python -m aimaginarium`) are in. The repair call, persistent history and the blind model comparison are built. Next: the internal API, then the Textual UI with dev panels, then the player MCP (see `wiki/architecture/dev-tools-and-clients.md`); a real director comes later. See `wiki/architecture/action-pipeline.md` ("As built") and `wiki/open-questions.md`.
+Early build. Storytelling essays are done, architecture and tech stack are drafted, and the prototype foundations are merged: SRD loader, SQLite world store with event log, and the LLM gateway (providers for Gemini and Ollama, retry, structured output, TOML config). The prompt library and a first playable terminal loop (`python -m aimaginarium`) are in. The repair call, persistent history and the blind model comparison are built. Next: the internal API (contract in `aimaginarium/api/`; in-process server next), then the Textual UI with dev panels, then the player MCP (see `wiki/architecture/dev-tools-and-clients.md`); a real director comes later. See `wiki/architecture/action-pipeline.md` ("As built") and `wiki/open-questions.md`.
 
 ## Tenets (do not violate)
 

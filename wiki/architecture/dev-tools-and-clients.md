@@ -33,6 +33,17 @@
 
 This replaces the dev-tools item previously in [../open-questions.md](../open-questions.md).
 
+### The contract (built in #56, `aimaginarium/api/`)
+
+**[Decided]** A check pauses the turn through **one path only**: an explicit `Roll` command. `send(SubmitAction)` streams the turn up to `CheckCalled` and ends with `Done(awaiting_roll=True)`; `send(Roll)` continues it with `RollResult`, the outcome narration and the commit. The terminal's current generator suspension goes away in #57, so remote and in-process clients behave alike.
+
+**[Proposed]** The rest of the shape:
+
+- **Commands.** Player path: `OpenScene`, `SubmitAction(text)`, `Roll`. System path: `GetPlayerView`, `Quit`, and dev-only `Undo`, `GetState(perspective)`, `GetTrace(since, limit)`. There are no in-game verbs.
+- **Events.** Every reply stream ends with `Done`. The terminal's turn events carry over (`Narration`, `CheckCalled`, `Repairing`, `ChangesRejected`, `ReplyUnreadable`); `Committed` becomes `StateChanged`, and `RollResult`, `CommandRejected`, `StateView`, `TurnRetracted` and the dev-only `TraceEvent` are new. Each is wrapped in an `Envelope` with a sequence number and turn id.
+- **Roles are enforced in one place.** Each event class lists the roles that may see it, and fields only the dev role may see are marked `dev_only`; `for_role` strips them. Dev-only today: the GM's `reason` and the difficulty workings on `CheckCalled`, the raw errors on `ChangesRejected`, the raw changes on `StateChanged`, and the GM state view.
+- **Protocols.** `Server.connect(role)` returns a `Session` with `send`, `subscribe` and `close`. Asking for the dev role while config disables it raises `RoleError`.
+
 ## Undo, replay and snapshots
 
 **[Decided]** Build **undo** (take back the last turn) and make it available in dev, so Ficus can judge how it affects play. Whether players ever get it is **[Open]**: it touches the stance that the player never truly loses, and players could use it to claw back results they dislike. One option to weigh later is limiting it to input mistakes.
