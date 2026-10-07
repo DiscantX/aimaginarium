@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aimaginarium.ui.utils import format_assistant_message, colorize, set_stylesheet, Stylesheet
+from aimaginarium.ui.utils import format_assistant_message, format_player_message, colorize, set_stylesheet, Stylesheet
 
 
 def test_format_assistant_message_basic():
@@ -11,6 +11,14 @@ def test_format_assistant_message_basic():
     assert "↳" in formatted
     assert "Hello world." in formatted
     assert formatted.endswith("\n\n")
+
+
+def test_format_player_message_basic():
+    text = "\"Aye.\" I agree. I decide to take some hardtack."
+    formatted = format_player_message(text, width=30)
+    assert ">" in formatted
+    assert "\"Aye.\" I agree." in formatted
+    assert formatted.endswith("\n")
 
 
 def test_format_assistant_message_multi_paragraph():

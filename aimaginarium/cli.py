@@ -22,7 +22,7 @@ from .engine import (
 )
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
-from .ui.utils import Spinner, format_assistant_message, colorize
+from .ui.utils import Spinner, format_assistant_message, format_player_message, colorize
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
@@ -97,7 +97,7 @@ async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool
     else:
         for msg in game._history:
             if msg.role == "user":
-                out(colorize(f"> {msg.content}", "player"))
+                out(format_player_message(msg.content), end="")
             elif msg.role == "assistant":
                 out(format_assistant_message(msg.content), end="")
     while True:
