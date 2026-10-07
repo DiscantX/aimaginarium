@@ -3,7 +3,7 @@
 import asyncio
 
 from aimaginarium.cli import main, play
-from engine_helpers import make_game, reply
+from engine_helpers import make_game, reply, stealth_check
 from aimaginarium.engine import PLAYER_ID, create_demo_world, Game
 from aimaginarium.prompts import PromptBuilder
 from aimaginarium.world import WorldStore
@@ -39,7 +39,7 @@ def test_plain_turn_prints_the_narration_and_quits():
 
 
 def test_check_shows_the_difficulty_and_pauses_for_the_roll():
-    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+    check = stealth_check("x")
     game = fresh_game([reply(["You creep."], check=check), reply(["You slip past."])], die=14)
     asked, text = run_session(game, ["I sneak.", "", "/quit"])
     assert asked[1].startswith("\n[Stealth check, difficulty 12] Press Enter") and "You rolled 14 +1 = 15." in text

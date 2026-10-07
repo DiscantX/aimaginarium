@@ -19,7 +19,7 @@ Consolidated from the planning discussion. Delete an item when it is decided and
 
 ## Architecture
 
-- Difficulty numbers: confirm tier plus difficulty factors, translated by the ruleset ([action pipeline](architecture/action-pipeline.md)).
+- Where the tier and factors are decided: in call 1 (today) or in a separate focused call before the roll ([action pipeline](architecture/action-pipeline.md)).
 - Confirm the draft core-element list and the plugin contract hooks ([core engine](architecture/core-engine.md)).
 - Time model: confirm the three-way split (commit order, in-world time, causal links), time frames, and which time-travel flavors the engine supports ([time](architecture/time-and-knowledge.md)).
 - Server-client: confirm an authoritative server with an in-process server for single player ([multiplayer](architecture/multiplayer-and-api.md)).
