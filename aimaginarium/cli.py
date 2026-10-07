@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import shutil
 import sys
+import textwrap
 from pathlib import Path
 from typing import Awaitable, Callable, Optional, Sequence
 
@@ -32,7 +34,10 @@ async def ask_input(prompt: str) -> str:
 
 
 def show(text: str = "", end: str = "\n") -> None:
-    """Prints and flushes, so narration appears as it streams."""
+    """Prints and flushes, wrapping text cleanly to terminal width."""
+    if text and end == "\n":
+        term_width = shutil.get_terminal_size().columns
+        text = textwrap.fill(text, width=term_width, break_long_words=False)
     print(text, end=end, flush=True)
 
 
@@ -71,6 +76,13 @@ async def play(game: Game, ask: Ask = ask_input, out: Show = show, opening: bool
     out("Type what you do. /state shows what the narrator sees, /quit leaves.\n")
     if opening:
         await render_turn(game.open_scene(), ask, out)
+    else:
+        for msg in game._history:
+            if msg.role == "user":
+                out(f"> {msg.content}")
+            elif msg.role == "assistant":
+                out(msg.content)
+                out()
     while True:
         try:
             text = (await ask("> ")).strip()
