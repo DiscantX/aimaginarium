@@ -21,6 +21,7 @@ from ..llm import (
 )
 from ..llm.structured import strip_fences
 from ..prompts import Prompt, PromptBuilder
+from ..trace import Tracer
 from ..world import ChangeError, CommitError, Event, Record, WorldStore
 from .replies import CheckRequest, OutcomeReply, RepairReply, TurnReply
 from .rules import D20Rules, Roll, Ruling
@@ -124,6 +125,7 @@ class Game:
         player_id: str,
         rules: Optional[D20Rules] = None,
         history_limit: int = 12,
+        tracer: Optional[Tracer] = None,
     ):
         """Initialises the game.
 
@@ -134,14 +136,21 @@ class Game:
             player_id: Entity id of the player's character.
             rules: Dice and classification; defaults to :class:`D20Rules`.
             history_limit: Most past messages sent to the model.
+            tracer: Where to trace what happens behind the scenes; a private one if omitted.
         """
         self.store, self.llm, self.prompts = store, llm, prompts
         self.player_id = player_id
         self.rules = rules or D20Rules()
         self.history_limit = history_limit
+        self.tracer = tracer or Tracer()
         self._history: list[Message] = self._load_history()
         self._pending: Optional[_Pending] = None
         self.turn_id: Optional[int] = None
+
+    def _begin(self, turn: int) -> int:
+        """Makes ``turn`` the current turn, for the API and the trace."""
+        self.turn_id = self.tracer.turn = turn
+        return turn
 
     @property
     def awaiting_roll(self) -> bool:
@@ -180,7 +189,7 @@ class Game:
 
     async def open_scene(self) -> AsyncIterator[TurnEvent]:
         """Narrates the opening of the story (call this once, before the first turn)."""
-        turn = self.turn_id = self.store.new_turn()
+        turn = self._begin(self.store.new_turn())
         prompt = self.prompts.build("opening", state=render_state(self.store, self.player_id))
         request = prompt.request(schema=TurnReply)
         reply = None
@@ -215,7 +224,7 @@ class Game:
             raise ValueError(f"{actor!r} is not the player's character")
         if self._pending:
             raise RuntimeError("a check is waiting for its roll")
-        turn = self.turn_id = self.store.new_turn()
+        turn = self._begin(self.store.new_turn())
         action = self._record("player.action", actor, turn, {"text": text}, [], [actor])
         state = render_state(self.store, self.player_id)
         prompt = self.prompts.build("narrate", state=state)
@@ -240,6 +249,9 @@ class Game:
                                  [action.seq], [actor])
         roll = self.rules.roll(self.store.get_entity(actor), check.skill, ruling.difficulty)
         self._pending = _Pending(turn, text, state, request, first, check, requested, roll)
+        self.tracer.emit("check.workings", {
+            "skill": check.skill, "reason": check.reason, "tier": ruling.tier, **ruling.as_payload(), "die": roll.die,
+            "modifier": roll.modifier, "total": roll.total, "classification": roll.classification}, turn)
         yield CheckCalled(roll, check.reason, ruling)
 
     async def resolve_check(self) -> AsyncIterator[TurnEvent]:
@@ -255,7 +267,7 @@ class Game:
             raise RuntimeError("no check is waiting for a roll")
         pending, self._pending = self._pending, None
         turn, roll, check, first = pending.turn, pending.roll, pending.check, pending.first
-        self.turn_id = turn
+        self._begin(turn)
         rolled = self._record("roll", self.player_id, turn, asdict(roll), [pending.requested.seq], [self.player_id])
         yield Rolled(roll)
 
@@ -292,8 +304,10 @@ class Game:
                     final = event
         except ProviderError as exc:
             self._record("llm.failed", ENGINE, turn, {**prompt.record(), "error": str(exc)}, causes or [])
+            self.tracer.emit("llm.failed", {"task": prompt.task, **prompt.record(), "error": str(exc)}, turn)
             yield ReplyUnreadable(f"the storyteller could not be reached: {exc}")
             return
+        self._trace_call(prompt, request, final, turn)
         try:
             data = json.loads(strip_fences(final.text))
             parts = data["narration"]
@@ -305,6 +319,7 @@ class Game:
             self._record("llm.call", ENGINE, turn, {**prompt.record(), "model": final.model, "usage": asdict(final.usage)},
                          causes or [])
             self._record("reply.invalid", ENGINE, turn, {"error": str(exc)[:500], "text": final.text[:2000]}, causes or [])
+            self.tracer.emit("reply.invalid", {"error": str(exc)[:500]}, turn)
             yield ReplyUnreadable(f"the reply could not be read: {exc}")
 
     # -- committing --------------------------------------------------------
@@ -319,21 +334,27 @@ class Game:
         """
         if not changes:
             return
+        self.tracer.emit("changes.proposed", {"changes": changes}, turn)
         result = self._try_commit(changes, turn, causes)
         if isinstance(result, tuple):
+            self._trace_accepted(changes, result, turn, repaired=False)
             yield Committed(result)
             return
         errors = result
         self._record("changes.rejected", ENGINE, turn, {"errors": [asdict(e) for e in errors], "changes": changes}, causes)
+        self.tracer.emit("changes.rejected", {"errors": [asdict(e) for e in errors], "changes": changes}, turn)
         yield Repairing()
         fixed = await self._repair(changes, errors, narration, turn, causes)
         if fixed:
             result = self._try_commit(fixed, turn, causes)
             if isinstance(result, tuple):
+                self._trace_accepted(fixed, result, turn, repaired=True)
                 yield Committed(result)
                 return
             self._record("changes.rejected", ENGINE, turn,
                          {"errors": [asdict(e) for e in result], "changes": fixed, "repaired": True}, causes)
+            self.tracer.emit("changes.rejected", {"errors": [asdict(e) for e in result], "changes": fixed,
+                                                  "repaired": True}, turn)
             errors = result
         yield ChangesRejected(tuple(errors))
 
@@ -357,14 +378,28 @@ class Game:
             "errors": "\n".join(f"- change {e.index}: {e.message} ({e.code})" for e in errors),
         }
         prompt = self.prompts.build("repair", state=values)
+        request = prompt.request(schema=RepairReply)
         try:
-            parsed, response = await self.llm.route(prompt.task).call(prompt.request(schema=RepairReply), RepairReply)
+            parsed, response = await self.llm.route(prompt.task).call(request, RepairReply)
         except (ProviderError, StructuredOutputError) as exc:
             self._record("llm.failed", ENGINE, turn, {**prompt.record(), "error": str(exc)}, causes)
+            self.tracer.emit("llm.failed", {"task": prompt.task, **prompt.record(), "error": str(exc)}, turn)
             return None
+        self._trace_call(prompt, request, response, turn)
         self._record("llm.call", ENGINE, turn,
                      {**prompt.record(), "model": response.model, "usage": asdict(response.usage)}, causes)
         return parsed.changes
+
+    def _trace_call(self, prompt: Prompt, request: Request, response: Response, turn: int) -> None:
+        """Traces a finished model call with its full prompt and raw reply."""
+        self.tracer.emit("llm.call", {
+            "task": prompt.task, **prompt.record(), "model": response.model, "usage": asdict(response.usage),
+            "system": request.system, "messages": [asdict(m) for m in request.messages], "reply": response.text}, turn)
+
+    def _trace_accepted(self, changes: list[dict[str, Any]], events: tuple[Event, ...], turn: int, repaired: bool) -> None:
+        """Traces committed changes and the resulting state diff."""
+        self.tracer.emit("changes.accepted", {"changes": changes, "repaired": repaired}, turn)
+        self.tracer.emit("state.diff", {"events": [{"seq": e.seq, "kind": e.kind, "payload": e.payload} for e in events]}, turn)
 
     def _record(self, kind: str, actor: str, turn: int, payload: dict[str, Any], causes: list[int],
                 entities: Optional[list[str]] = None) -> Event:

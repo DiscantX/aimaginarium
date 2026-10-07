@@ -55,7 +55,7 @@ def test_dev_role_is_refused_when_disabled_and_player_cannot_send_dev_commands()
 
 def test_plain_turn_streams_narration_commits_and_ends_with_done():
     changes = [{"op": "update", "entity": PLAYER_ID, "set": {"sheet.mood": "calm"}}]
-    session = served([reply(["Marta nods."], changes)]).connect()
+    session = served([reply(["Marta nods."], changes)], dev=False).connect()
     out = run(events(session.send(SubmitAction("I greet Marta."))))
     assert kinds(out) == ["Narration", "StateChanged", "Done"]
     assert [e.seq for e in out] == list(range(1, len(out) + 1)) and {e.turn_id for e in out} == {1}
@@ -137,7 +137,7 @@ def test_unbuilt_dev_commands_are_rejected_politely():
 
 
 def test_subscribers_replay_and_follow_the_log_until_the_session_closes():
-    server = served([reply(["One."]), reply(["Two."])])
+    server = served([reply(["One."]), reply(["Two."])], dev=False)
     player, watcher = server.connect(), server.connect()
 
     async def scenario():

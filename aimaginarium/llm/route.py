@@ -50,12 +50,14 @@ class FallbackNotice:
         failed: Label of the candidate that failed.
         next: Label of the candidate tried next.
         error: Why the candidate failed.
+        cooled: Whether the failed candidate was put on cool-down.
     """
 
     task: str
     failed: str
     next: str
     error: Exception
+    cooled: bool = False
 
 
 class Cooldown:
@@ -136,7 +138,7 @@ class Route:
         if cool:
             self._cooldown.mark(failed.label)
         if index + 1 < len(order) and self._on_fallback:
-            self._on_fallback(FallbackNotice(self.task, failed.label, order[index + 1].label, error))
+            self._on_fallback(FallbackNotice(self.task, failed.label, order[index + 1].label, error, cool))
 
     async def stream(self, request: Request) -> AsyncIterator[StreamEvent]:
         """Streams from the first candidate that is available.

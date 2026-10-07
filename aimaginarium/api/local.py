@@ -12,14 +12,15 @@ from typing import Any, AsyncIterator, Optional
 
 from .. import engine as eng
 from ..engine import Game, render_player_view, render_state
+from ..trace import TraceRecord
 from .commands import Command, GetPlayerView, GetState, GetTrace, OpenScene, Quit, Roll, SubmitAction, Undo
 from .events import (
     ApiEvent, ChangesRejected, CheckCalled, CommandRejected, Done, Envelope, Narration, Repairing, ReplyUnreadable,
-    RollResult, StateChanged, StateView,
+    RollResult, StateChanged, StateView, TraceEvent,
 )
 from .roles import Role, RoleError
 
-_NOT_BUILT = {Undo: "undo (issue #59)", GetTrace: "the trace channel (issue #58)"}
+_NOT_BUILT = {Undo: "undo (issue #59)"}
 
 
 def player_view(game: Game) -> dict[str, Any]:
@@ -44,6 +45,8 @@ class LocalServer:
         self._lock = asyncio.Lock()
         self._waiters: list[asyncio.Future] = []
         self._turn: Optional[int] = None
+        if dev_enabled:  # trace goes into the log only when someone may see it
+            game.tracer.add_sink(self._on_trace)
 
     def connect(self, role: Role = Role.PLAYER) -> "LocalSession":
         """Opens a session.
@@ -57,9 +60,17 @@ class LocalServer:
 
     # -- the event log ---------------------------------------------------
 
-    def _emit(self, event: ApiEvent) -> Envelope:
+    def _on_trace(self, record: TraceRecord) -> None:
+        """Puts a trace record into the log, for dev subscribers."""
+        self._emit(self._trace_event(record), record.turn_id)
+
+    @staticmethod
+    def _trace_event(record: TraceRecord) -> TraceEvent:
+        return TraceEvent(record.kind, record.payload, record.seq, record.at, record.turn_id)
+
+    def _emit(self, event: ApiEvent, turn_id: Optional[int] = None) -> Envelope:
         """Appends an event to the log, wakes subscribers and returns its envelope."""
-        envelope = Envelope(len(self._log) + 1, self._turn, event)
+        envelope = Envelope(len(self._log) + 1, self._turn if turn_id is None else turn_id, event)
         self._log.append(envelope)
         self._wake()
         return envelope
@@ -107,6 +118,9 @@ class LocalServer:
             if command.perspective == "player":
                 return self._single(StateView("player", player_view(game)))
             return self._single(StateView("gm", render_state(game.store, game.player_id)))
+        if isinstance(command, GetTrace):
+            records = game.tracer.records(command.since, command.limit, command.turn)
+            return self._single(*(self._trace_event(r) for r in records))
         if isinstance(command, Quit):
             return self._single()
         return self._rejected("not_available", f"{_NOT_BUILT.get(type(command), command.name)} is not built yet.")

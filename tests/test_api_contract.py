@@ -42,7 +42,7 @@ def test_player_commands_are_allowed_for_both_roles():
 
 
 def test_commands_round_trip_through_the_wire_form():
-    for cmd in (OpenScene(), SubmitAction("I open the door"), Roll(), Quit(), Undo(), GetState("player"), GetTrace(5, 10)):
+    for cmd in (OpenScene(), SubmitAction("I open the door"), Roll(), Quit(), Undo(), GetState("player"), GetTrace(5, 10, 3)):
         assert parse_command(json.loads(json.dumps(cmd.to_dict()))) == cmd
 
 

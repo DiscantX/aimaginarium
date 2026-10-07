@@ -18,12 +18,13 @@ from typing import Awaitable, Callable, Optional, Sequence
 from dotenv import load_dotenv
 
 from .api import (
-    ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, LocalServer, Narration, OpenScene,
-    Quit, Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction,
+    ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, LocalServer, Narration,
+    OpenScene, Quit, Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent,
 )
 from .engine import Game, create_demo_world
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
+from .trace import JsonlSink, Tracer, format_timeline
 from .ui.utils.spinner import Spinner
 from .world import WorldStore
 
@@ -161,6 +162,16 @@ async def show_state(session: Session, out: Show, perspective: str = "player") -
     out((format_player_view(view.data) if view.perspective == "player" else "\n".join(view.data.values())) + "\n")
 
 
+async def show_trace(session: Session, out: Show, args: list[str]) -> None:
+    """Prints one turn as a timeline (dev role only): ``/inspect [turn] [full]``."""
+    wanted = next((int(a) for a in args if a.isdigit()), None)
+    records = [e for e in await collect(session.send(GetTrace(limit=2000, turn=wanted))) if isinstance(e, TraceEvent)]
+    if wanted is None and records:
+        wanted = max((r.turn_id for r in records if r.turn_id is not None), default=None)
+        records = [r for r in records if r.turn_id == wanted]
+    out((f"Turn {wanted}\n" if wanted is not None else "") + format_timeline(records, full="full" in args) + "\n")
+
+
 async def show_story(session: Session, out: Show) -> None:
     """Replays the story so far, for a game that was already begun."""
     view = next(e for e in await collect(session.send(GetPlayerView())) if isinstance(e, StateView))
@@ -180,7 +191,7 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
         opening: Whether to narrate the opening scene first.
     """
     dev = session.role is Role.DEV
-    out("Type what you do. /state shows your situation" + (", /state gm the GM's view" if dev else "") + ", /quit leaves.\n")
+    out("Type what you do. /state shows your situation" + (", /state gm the GM's view, /inspect [turn] [full] the trace" if dev else "") + ", /quit leaves.\n")
     if opening:
         await run_turn(session, OpenScene(), ask, out)
     else:
@@ -197,6 +208,8 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
             await show_state(session, out)
         elif text == "/state gm" and dev:
             await show_state(session, out, "gm")
+        elif text.split()[:1] == ["/inspect"] and dev:
+            await show_trace(session, out, text.split()[1:])
         elif text.startswith("/"):
             out(f"Unknown command {text.split()[0]}.\n")
         elif text:
@@ -224,26 +237,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--config", help="path to the TOML configuration (default: aimaginarium.toml)")
     parser.add_argument("--world", default="worlds/demo.sqlite", help="world database file (created if missing)")
     parser.add_argument("--dev", action="store_true", help="connect with the dev role (GM view, trace)")
+    parser.add_argument("--trace", help="append the trace (prompts, replies, timings, checks) to this JSON-lines file")
     args = parser.parse_args(argv)
 
     load_dotenv()
+    tracer = Tracer()
+    if args.trace:
+        tracer.add_sink(JsonlSink(Path(args.trace)))
+
+    def retrying(notice) -> None:
+        print(f"[the storyteller is busy; retrying in {notice.delay:.0f}s]", file=sys.stderr)
+        tracer.on_retry(notice)
+
+    def falling_back(notice) -> None:
+        print(f"[{notice.failed} is unavailable; trying {notice.next}]", file=sys.stderr)
+        tracer.on_fallback(notice)
+
     try:
-        llm = factory_from_file(
-            args.config,
-            on_retry=lambda n: print(f"[the storyteller is busy; retrying in {n.delay:.0f}s]", file=sys.stderr),
-            on_fallback=lambda n: print(f"[{n.failed} is unavailable; trying {n.next}]", file=sys.stderr),
-        )
+        llm = factory_from_file(args.config, on_retry=retrying, on_fallback=falling_back)
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
     store, player_id, begun = _open_world(Path(args.world))
     try:
-        game = Game(store, llm, PromptBuilder.from_directory(), player_id)
+        game = Game(store, llm, PromptBuilder.from_directory(), player_id, tracer=tracer)
         session = LocalServer(game, dev_enabled=args.dev).connect(Role.DEV if args.dev else Role.PLAYER)
         asyncio.run(play(session, opening=not begun))
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
     finally:
+        tracer.close()
         store.close()
     return 0
