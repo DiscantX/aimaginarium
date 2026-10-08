@@ -21,16 +21,18 @@ from engine_helpers import make_game, reply, stealth_check  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def instant(monkeypatch):
-    """No animation and no holding, so a scenario runs as fast as the events arrive."""
-    monkeypatch.setenv("TEXTUAL_ANIMATIONS", "none")
-    monkeypatch.setattr(RollScreen, "hold", 0.0)
+    """No waiting in the roll window, so a scenario runs as fast as the events arrive."""
+    monkeypatch.setattr(RollScreen, "min_spin", 0.0)
 
 
-def make_app(replies, die=15, opening=False, role=Role.PLAYER):
+def make_app(replies, die=15, opening=False, role=Role.PLAYER, auto_close=True):
     store = WorldStore.open()
     create_demo_world(store)
     game = make_game(store, replies, die)[0]
-    return GameApp(LocalServer(game, dev_enabled=True).connect(role), opening=opening)
+    app = GameApp(LocalServer(game, dev_enabled=True).connect(role), opening=opening)
+    app.settings.roll_auto_close, app.settings.roll_hold = auto_close, 0.0
+    app.animation_level = "none"  # Textual reads TEXTUAL_ANIMATIONS once at import, so set it on the app itself
+    return app
 
 
 async def until(pilot, condition, tries=200):
@@ -82,7 +84,7 @@ def test_a_check_opens_the_roll_modal_and_the_roll_lands_in_the_log():
             await act(pilot, "I sneak.")
             await until(pilot, lambda: isinstance(app.screen, RollScreen))
             assert app.screen.check.skill == "stealth" and app.screen.check.difficulty == 12
-            await pilot.click("#roll")
+            await pilot.click("#button")
             await until(pilot, lambda: texts(app, "narration") == ["You creep.", "You slip past."]
                         and not isinstance(app.screen, RollScreen))
             assert texts(app, "roll") == ["Stealth: rolled 14 +1 = 15 against 12, success"]
@@ -119,7 +121,7 @@ def test_the_dev_role_can_preview_a_roll_without_touching_the_game():
             await act(pilot, "/roll climb 2 1")
             await until(pilot, lambda: isinstance(app.screen, RollScreen))
             assert (app.screen.check.skill, app.screen.check.difficulty) == ("climb", 2)
-            await pilot.click("#roll")
+            await pilot.click("#button")
             await until(pilot, lambda: texts(app, "roll") and not isinstance(app.screen, RollScreen))
             assert texts(app, "roll")[0].startswith("[preview] Climb: rolled 1 +")
             assert texts(app, "roll")[0].endswith("critical failure")
@@ -187,3 +189,42 @@ def test_unknown_slash_commands_are_noted_and_quit_leaves():
             await act(pilot, "/quit")
             await until(pilot, lambda: app._exit)
     run(scenario)
+
+
+def test_by_default_the_roll_window_waits_for_the_player():
+    async def scenario():
+        app = make_app([reply(["You creep."], check=stealth_check()), reply(["You slip past."])], die=14,
+                       auto_close=False)
+        async with app.run_test() as pilot:
+            await act(pilot, "I sneak.")
+            await until(pilot, lambda: isinstance(app.screen, RollScreen))
+            await pilot.click("#button")
+            await until(pilot, lambda: app.screen.phase == "shown" and str(app.screen.query_one("#button").label)
+                        == "Continue")
+            await pilot.press("a", "b", "x")           # typing does not dismiss it
+            await pilot.pause(0.2)
+            assert isinstance(app.screen, RollScreen)
+            await pilot.click("#button")
+            await until(pilot, lambda: texts(app, "narration") == ["You creep.", "You slip past."]
+                        and not isinstance(app.screen, RollScreen))
+    run(scenario)
+
+
+def test_the_roll_window_closes_by_itself_when_auto_close_is_on():
+    async def scenario():
+        app = make_app([reply(["You creep."], check=stealth_check()), reply(["You slip past."])], die=14)
+        async with app.run_test() as pilot:
+            await act(pilot, "I sneak.")
+            await until(pilot, lambda: isinstance(app.screen, RollScreen))
+            await pilot.press("r")
+            await until(pilot, lambda: not isinstance(app.screen, RollScreen) and len(texts(app, "narration")) == 2)
+    run(scenario)
+
+
+def test_the_die_slows_into_the_final_faces():
+    """Faces land at t = 1 - (1 - i/N)^(1/ramp): the first gap is brisk and the last is long and clearly slower."""
+    n, ramp, total = 30, RollScreen.ramp, RollScreen.tumble
+    times = [total * (1 - (1 - i / n) ** (1 / ramp)) for i in range(n + 1)]
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    assert gaps[0] < 0.08 and gaps[-1] > 0.4
+    assert gaps[-1] > 2 * gaps[-2] and all(b >= a for a, b in zip(gaps, gaps[1:]))

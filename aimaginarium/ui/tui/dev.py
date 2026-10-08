@@ -26,7 +26,7 @@ async def preview_roll(app: App, story: StoryLog, args: list[str]) -> None:
     except ValueError:
         story.add("Usage: /roll [skill] [difficulty] [die 1-20]", "system")
         return
-    screen = RollScreen(CheckCalled(skill, difficulty))
+    screen = RollScreen(CheckCalled(skill, difficulty), app.settings)
     await app.push_screen(screen)
     await screen.requested.wait()
     await asyncio.sleep(0.8)  # stands in for the storyteller's delay

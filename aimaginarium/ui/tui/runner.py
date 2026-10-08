@@ -37,7 +37,7 @@ class TurnRunner:
             check, done = await self._reply(command, screen)
             command, screen = None, None
             if done.awaiting_roll and check is not None:
-                screen = RollScreen(check)
+                screen = RollScreen(check, self.app.settings)
                 await self.app.push_screen(screen)
                 await screen.requested.wait()
                 command = Roll()
