@@ -77,13 +77,19 @@ class CheckCalled(ApiEvent):
 
 @dataclass(frozen=True)
 class RollResult(ApiEvent):
-    """The revealed roll, sent in reply to ``Roll``."""
+    """The revealed roll, sent in reply to ``Roll``.
+
+    Attributes:
+        classification: The engine's ruling on the roll: ``critical_failure``, ``failure``, ``narrow_success``,
+            ``success`` or ``critical_success``. Clients show this rather than judging the total themselves.
+    """
 
     skill: str
     die: int
     modifier: int
     total: int
     difficulty: int
+    classification: str = ""
 
 
 @dataclass(frozen=True)

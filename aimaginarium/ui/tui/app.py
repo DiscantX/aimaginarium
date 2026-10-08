@@ -4,13 +4,15 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.widgets import Footer, Header, LoadingIndicator
+from textual.widgets import Footer, Header
 
-from ...api import GetPlayerView, OpenScene, Quit, Session, StateView, SubmitAction
+from ...api import GetPlayerView, OpenScene, Quit, Role, Session, StateView, SubmitAction
 from ...llm import ConfigError
+from .dev import preview_roll
 from .inputs import ActionInput, PasteConfirm
 from .runner import TurnRunner
 from .story import StoryLog
+from .thinking import Thinking
 from .theme import CANDLELIT, ROLE_DEFAULTS
 
 
@@ -25,8 +27,6 @@ class GameApp(App):
     TITLE = "AImaginarium"
     CSS = """
     #story-column { width: 1fr; }
-    #thinking { height: 1; display: none; color: $primary; }
-    #thinking.busy { display: block; }
     ActionInput { margin: 0 1; }
     """
     BINDINGS = [Binding("ctrl+q", "quit", "Quit", priority=True)]
@@ -43,7 +43,7 @@ class GameApp(App):
         yield Header()
         with Vertical(id="story-column"):
             yield StoryLog(id="story")
-            yield LoadingIndicator(id="thinking")
+            yield Thinking(id="thinking")
             yield ActionInput(placeholder="What do you do?", id="action")
         yield Footer()
 
@@ -62,7 +62,8 @@ class GameApp(App):
         return self.query_one(StoryLog)
 
     def _set_busy(self, busy: bool) -> None:
-        self.query_one("#thinking").set_class(busy, "busy")
+        thinking = self.query_one(Thinking)
+        thinking.start() if busy else thinking.stop()
 
     async def _replay(self) -> None:
         """Shows the story so far, for a game that was already begun."""
@@ -94,6 +95,8 @@ class GameApp(App):
         event.input.value = ""
         if text in ("/quit", "/exit"):
             await self.action_quit()
+        elif text.split()[:1] == ["/roll"] and self.session.role is Role.DEV:
+            self.run_worker(preview_roll(self, self.story, text.split()[1:]))
         elif text.startswith("/"):
             self.story.add(f"Unknown command {text.split()[0]}.", "system")
         elif text:
