@@ -19,7 +19,9 @@ Consolidated from the planning discussion. Delete an item when it is decided and
 
 ## Architecture
 
-- Difficulty numbers: confirm tier plus difficulty factors, translated by the ruleset ([action pipeline](architecture/action-pipeline.md)).
+- Whether the tier and factors need a separate focused call before the roll; held off until more testing ([action pipeline](architecture/action-pipeline.md)).
+- Dev tools and clients: the design is recorded in [dev-tools-and-clients.md](architecture/dev-tools-and-clients.md); build order is internal API, Textual UI, player MCP. Still open: whether players ever get undo, and whether the pure DM template is an MCP prompt or a tool.
+- Entity highlighting ([entity-highlighting.md](architecture/entity-highlighting.md)): one color or a color per entity type; whether uncolored nouns discourage interaction (watch in testing).
 - Confirm the draft core-element list and the plugin contract hooks ([core engine](architecture/core-engine.md)).
 - Time model: confirm the three-way split (commit order, in-world time, causal links), time frames, and which time-travel flavors the engine supports ([time](architecture/time-and-knowledge.md)).
 - Server-client: confirm an authoritative server with an in-process server for single player ([multiplayer](architecture/multiplayer-and-api.md)).

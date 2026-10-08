@@ -173,7 +173,7 @@ def test_request_carries_the_plan_schema(builder):
 
 
 def test_bad_recipes_are_errors(tmp_path):
-    for name, text, message in [("a", "id = 'x'\nsystem = []", "needs 'system' and a 'plan'"), ("b", "system = []", "missing"), ("c", "id = [", "not valid TOML")]:
+    for name, text, message in [("a", "id = 'x'\ntask = 't'", "needs 'system'"), ("b", "system = []", "missing"), ("c", "id = [", "not valid TOML")]:
         path = tmp_path / f"{name}.toml"
         path.write_text(text)
         with pytest.raises(PromptError, match=message):
@@ -207,13 +207,29 @@ def test_shipped_library_builds_every_recipe_and_variant(classification):
         for variant in recipe.variants:
             values = Values(classification)
             prompt = builder.build(recipe.id, values, values, variant=variant)
-            assert prompt.system and prompt.plan.max >= 1
+            assert prompt.system and (prompt.plan is None or prompt.plan.max >= 1)
 
 
 def test_check_outcome_picks_the_instruction_for_the_classification():
     builder = PromptBuilder.from_directory(LIBRARY)
-    state = {"world_state": "w", "character": "c", "roll": 1, "skill": "Stealth", "difficulty": 12, "margin": -11}
+    state = {"world_state": "w", "character": "c", "roll": 1, "skill": "Stealth", "difficulty": 12, "margin": -11, "tier": "easy"}
     low = builder.build("check_outcome", state=state | {"classification": "critical_failure"})
     high = builder.build("check_outcome", state=state | {"classification": "critical_success"})
     assert "critical failure" in low.state and "critical success" in high.state
     assert low.system == high.system
+
+
+def test_recipe_without_a_plan_has_no_narration_and_uses_the_schema_as_given(tmp_path):
+    (tmp_path / "fragments").mkdir()
+    (tmp_path / "fragments" / "a.md").write_text("Hello {x}.")
+    (tmp_path / "recipes").mkdir()
+    (tmp_path / "recipes" / "r.toml").write_text('id = "r"\nsystem = ["a"]\nstate = ["a"]\n')
+    prompt = PromptBuilder.from_directory(tmp_path).build("r", {"x": 1}, {"x": 2})
+    assert prompt.plan is None and prompt.system == "Hello 1." and "paragraph" not in prompt.system
+    assert prompt.request(schema=Extra).schema is Extra
+
+
+def test_opening_introduces_the_player_character_and_the_narrator_is_told_who_they_are():
+    prompt = PromptBuilder.from_directory(LIBRARY).build("opening", state={"world_state": "w", "character": "c"})
+    assert "Introduce the player's character" in prompt.system
+    assert 'the person you address as "you"' in prompt.system

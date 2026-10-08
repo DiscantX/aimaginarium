@@ -37,12 +37,15 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 ## Difficulty numbers
 
-**[Open]** Ficus asked how the target number is decided and how to avoid the same number per tier. **[Proposed]** answer:
+**[Decided]** Ficus asked how the target number is decided and how to avoid the same number per tier. The answer:
 
 - The LLM does not output a raw number (models anchor on familiar values, and a number means nothing outside its ruleset).
 - It outputs a **tier**, defined in the fiction, plus a short list of **difficulty factors** (direction and size: rain-slick, no tools, guards nearby).
 - **The ruleset translates** into its own mechanic: a 5e DC, a band, a number of successes. Code applies the factors to the tier's base, giving varied, explainable numbers.
-- Factors double as the **dependencies** of the precedent log. Whether the target is shown to the player before rolling is a setting.
+- Factors double as the **dependencies** of the precedent log.
+- **[Decided]** The player sees the number before rolling.
+- **[Built]** In `D20Rules.rule()`: tiers very_easy 5, easy 10, medium 15, hard 20, very_hard 25, nearly_impossible 30 (the 5e DC ladder); factors small 1, medium 2, large 4, harder adding and easier subtracting; the total adjustment is limited to +-6; the result stays in 1..40. The breakdown (`base`, `adjustments`, `difficulty`) is stored in the `check.requested` event next to the model's `tier` and `factors`. Unknown tier, size or effect words from a weaker model are normalised (medium, small, harder) instead of failing the turn.
+- **[Decided]** For now the narrator decides the tier and factors in call 1, together with the setup narration. Call 2 cannot, because it happens after the roll and the ruling must be committed before it. **[Open]** A separate, focused call between call 1 and the roll is possible at the cost of a third call on check turns; Ficus asked to hold off until more testing shows whether call 1's prompt is overloaded or the factors come out poorly.
 
 ## Precedent log
 
@@ -58,16 +61,16 @@ The LLM is the GM and adjudicates; the engine is the bookkeeper and catches mech
 
 *Status tags do not apply: this records what the code does today.*
 
-`aimaginarium/engine/game.py` holds `Game`, a **temporary** in-process facade (`open_scene()`, `take_turn(actor, text)`), and `aimaginarium/cli.py` is the terminal client. Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
+`aimaginarium/engine/game.py` holds `Game` (`open_scene()`, `take_turn(actor, text)`, `resolve_check()`); a turn that calls a check ends at `CheckCalled` and `resolve_check()` continues it. Clients do not call `Game`: `aimaginarium/api/local.py` serves it through the API contract, and `aimaginarium/cli.py` is the terminal client, a player-role session on that server (`--dev` connects with the dev role). Run it with `python -m aimaginarium` after copying `aimaginarium.example.toml` to `aimaginarium.toml` and putting the key in `.env`. A new world file starts as a hand-made demo world (a tavern, a square, Kael and Marta).
 
-A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The roll shown is die, modifier and total, never the difficulty.
+A turn is an async stream of events. After a `CheckCalled` event the generator waits until the client resumes it, which the terminal does when the player presses Enter; the roll is precomputed, so the button is cosmetic. The check prompt shows the difficulty (`[Stealth check, difficulty 12]`), the number the total must meet; the roll shown afterwards is die, modifier and total. **[Decided]** The player sees the difficulty. A natural 1 or 20 is critical whatever the total.
 
 1. The player's input is logged (`player.action`, actor = the character).
 2. Call 1 (`narrate`) streams narration. The reply is lenient to parse: JSON that does not match the plan's paragraph count still works, because the plan is enforced by the provider's schema rather than by the engine. The call is logged (`llm.call`: recipe, variant, fragment hashes, model, usage including time to first token and cached tokens).
 3. No check: the proposed changes are validated and committed with actor `gm`, caused by the action.
 4. Check: `check.requested` is committed before the roll; changes in a check-bearing call 1 are not committed. The roll is logged (`roll`), then call 2 (`check_outcome`) is made with call 1's request and narration as its prefix, the outcome instruction chosen by the roll's classification, and its changes are committed with the roll as their cause.
-5. A rejected commit writes nothing but `changes.rejected` (errors and proposed changes) and tells the player; an unreadable reply or an unavailable provider writes `reply.invalid` or `llm.failed` and leaves the world unchanged.
+5. A rejected commit writes nothing but `changes.rejected` (errors and proposed changes). The engine then makes one repair call (task `repair`, recipe without a narration plan): it shows the narrator the narration the player read, the changes it proposed and the store's errors, and asks for corrected changes only. The correction is committed with the same causes if the store accepts it. If it is rejected again, empty, or the call fails, the world stays unchanged and the player is told. An unreadable reply or an unavailable provider writes `reply.invalid` or `llm.failed` and leaves the world unchanged.
 
 Rules are a minimal d20 stand-in (`D20Rules`): natural 1 and 20 are critical, a success by fewer than 3 is narrow. Skills come from `data.sheet.skills` on the character.
 
-**Not built yet** (each its own issue): the repair call for rejected changes (the narration the player saw can currently disagree with the world); persistent conversation history (it is in memory, so a restarted game continues without it); player-facing projections of facts (the narrator sees secrets, marked with who knows them); background commits while the player reads; any director other than the null one.
+**Not built yet** (each its own issue): player-facing projections of facts (the narrator sees secrets, marked with who knows them); background commits while the player reads; any director other than the null one. Conversation history is restored from the log (narration is logged in `llm.call`).

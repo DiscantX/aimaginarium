@@ -11,4 +11,4 @@ Besides the narration, return the changes the story makes to the world as a list
 - supersede: fact (a fact id that is no longer true)
 - reveal: fact, to (ids of those who now know it)
 - connect / disconnect: from_id, to_id, label
-Only change what the story actually changed. An empty list is normal. Never change the player's character in ways the player did not cause.
+The entity (or fact, or parent) in a change must be an id taken from the state exactly as written (such as char-2) or a ref you created earlier in this same reply. Never invent an id or use a description as one. To record that something happened, establish a fact about an existing entity and put the fact in `text`, for example {"op": "establish", "entity": "char-2", "text": "Marta caught Kael at the bar"}; you cannot choose a fact's id. When in doubt, leave the change out. Only change what the story actually changed. An empty list is normal. Never change the player's character in ways the player did not cause.

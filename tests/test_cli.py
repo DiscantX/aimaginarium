@@ -3,29 +3,30 @@
 import asyncio
 import re
 
+from aimaginarium.api import LocalServer, Role
 from aimaginarium.cli import main, play
-from engine_helpers import make_game, reply
+from engine_helpers import make_game, reply, stealth_check
 from aimaginarium.engine import PLAYER_ID, create_demo_world, Game
 from aimaginarium.prompts import PromptBuilder
 from aimaginarium.world import WorldStore
 
 
-def run_session(game, inputs, opening=False):
+def run_session(game, inputs, opening=False, role=Role.PLAYER):
     asked, output = [], []
     lines = iter(inputs)
 
     async def ask(prompt):
-        plain = re.sub(r'\033\[[0-9;]*m', '', prompt)
-        asked.append(plain)
+        asked.append(re.sub(r"\033\[[0-9;]*m", "", prompt))
         try:
             return next(lines)
         except StopIteration:
             raise EOFError
 
     def out(text="", end="\n"):
-        output.append(text + end)
+        output.append(re.sub(r"\033\[[0-9;]*m", "", text) + end)
 
-    asyncio.run(play(game, ask, out, opening=opening))
+    session = LocalServer(game, dev_enabled=True).connect(role)
+    asyncio.run(play(session, ask, out, opening=opening))
     return asked, "".join(output)
 
 
@@ -40,25 +41,46 @@ def test_plain_turn_prints_the_narration_and_quits():
     assert "Marta nods." in text and asked == ["> ", "> "]
 
 
-def test_check_pauses_for_the_roll_and_never_shows_the_difficulty():
-    check = {"skill": "stealth", "difficulty": 12, "reason": "x"}
+def test_check_shows_the_difficulty_and_pauses_for_the_roll():
+    check = stealth_check("x")
     game = fresh_game([reply(["You creep."], check=check), reply(["You slip past."])], die=14)
     asked, text = run_session(game, ["I sneak.", "", "/quit"])
-    assert asked[1].startswith("\n[Stealth check] Press Enter") and "You rolled 14 +1 = 15." in text
+    assert asked[1].startswith("\n[Stealth check, difficulty 12] Press Enter") and "You rolled 14 +1 = 15." in text
     assert text.index("You creep.") < text.index("You rolled") < text.index("You slip past.")
-    assert "12" not in text
 
 
 def test_rejected_changes_are_explained_without_stopping():
     changes = [{"op": "move", "entity": "item-99", "to": PLAYER_ID}]
-    _, text = run_session(fresh_game([reply(["Done."], changes)]), ["I take it.", "/quit"])
+    _, text = run_session(fresh_game([reply(["Done."], changes), '{"changes": []}']), ["I take it.", "/quit"])
     assert "were not accepted" in text and "world is unchanged" in text
 
 
-def test_opening_and_state_command():
+def test_opening_and_state_command_show_the_players_view_not_the_gms():
     game = fresh_game([reply(["A", "B", "C", "D", "E", "F", "G"])])
-    _, text = run_session(game, ["/state", "/quit"], opening=True)
-    assert "A" in text and "B" in text and text.index("A") < text.index("Location:") and "Marta [char-2]" in text
+    _, text = run_session(game, ["/state", "/state gm", "/quit"], opening=True)
+    assert "G" in text and text.index("A") < text.index("Location:") and "Marta:" in text
+    assert "[char-2]" not in text and "secret" not in text
+
+
+def test_dev_role_can_read_the_gm_view():
+    game = fresh_game([reply(["A"])])
+    _, text = run_session(game, ["/state gm", "/quit"], opening=True, role=Role.DEV)
+    assert "Marta [char-2]" in text and "secret; known to char-2" in text
+
+
+def test_resuming_replays_the_story():
+    store = WorldStore.open()
+    create_demo_world(store)
+    game1, factory = make_game(store, [reply(["Hello world."]), reply(["Second response."])])
+    run_session(game1, ["First action.", "/quit"], opening=True)
+    game2 = Game(store, factory, PromptBuilder.from_directory(), PLAYER_ID)
+    _, text = run_session(game2, ["/quit"])
+    assert "> First action." in text and "Hello world." in text
+
+
+def test_unknown_slash_commands_are_never_sent_to_the_narrator():
+    _, text = run_session(fresh_game([]), ["/state gm", "/frobnicate", "/quit"])
+    assert "Unknown command /state" in text and "Unknown command /frobnicate" in text
 
 
 def test_blank_lines_are_ignored_and_end_of_input_quits():
@@ -80,18 +102,62 @@ def test_conversation_history_persists_across_restart():
     run_session(game1, ["First action.", "/quit"], opening=True)
 
     game2 = Game(store, factory, PromptBuilder.from_directory(), PLAYER_ID)
-    assert len(game2._history) == 4
-    assert game2._history[0].content == "(The story begins.)"
-    assert game2._history[1].content == "Hello world."
-    assert game2._history[2].content == "First action."
-    assert game2._history[3].content == "Second response."
+    assert len(game2.history) == 4
+    assert game2.history[0].content == "(The story begins.)"
+    assert game2.history[1].content == "Hello world."
+    assert game2.history[2].content == "First action."
+    assert game2.history[3].content == "Second response."
 
 
-def test_keyboard_interrupt_exits_cleanly():
+def test_pending_input_is_discarded_on_windows(monkeypatch):
+    import sys
+    import types
+    from aimaginarium.cli import discard_pending_input
+
+    keys = list("\r\r\r")
+    fake = types.SimpleNamespace(kbhit=lambda: bool(keys), getwch=lambda: keys.pop())
+    monkeypatch.setitem(sys.modules, "msvcrt", fake)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    discard_pending_input()
+    assert keys == []
+
+
+def test_pending_input_is_flushed_on_unix_and_ignored_when_not_a_terminal(monkeypatch):
+    import sys
+    import types
+    from aimaginarium.cli import discard_pending_input
+
+    calls = []
+    fake = types.SimpleNamespace(tcflush=lambda fd, how: calls.append((fd, how)), TCIFLUSH=0)
+    monkeypatch.setitem(sys.modules, "termios", fake)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sys.stdin, "fileno", lambda: 7, raising=False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False, raising=False)
+    discard_pending_input()
+    assert calls == []
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
+    discard_pending_input()
+    assert calls == [(7, 0)]
+
+
+def test_ctrl_c_at_the_prompt_leaves_cleanly():
     async def ask(prompt):
         raise KeyboardInterrupt
 
-    game = fresh_game([])
-    asked, text = [], []
-    asyncio.run(play(game, ask, lambda t, end="\n": text.append(t), opening=False))
-    assert True
+    session = LocalServer(fresh_game([])).connect()
+    asyncio.run(play(session, ask, lambda text="", end="\n": None, opening=False))
+    assert session._closed
+
+
+def test_ctrl_c_at_the_roll_prompt_leaves_cleanly():
+    answers = iter(["I sneak."])
+
+    async def ask(prompt):
+        if "Press Enter" in prompt:
+            raise KeyboardInterrupt
+        return next(answers)
+
+    session = LocalServer(fresh_game([reply(["You creep."], check=stealth_check())])).connect()
+    asyncio.run(play(session, ask, lambda text="", end="\n": None, opening=False))
+    assert session._closed

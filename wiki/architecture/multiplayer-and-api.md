@@ -18,6 +18,8 @@
 
 **[Decided, considering]** Two MCP servers: one where Claude Desktop (or similar) acts as the dungeon master, and a separate one where Claude can be a *player*. Player interactions go through the internal API and are MCP-shaped.
 
+**[Decided]** One API with `player` and `dev` roles; the build order, trace channel and dev tools are in [dev-tools-and-clients.md](dev-tools-and-clients.md).
+
 **[Proposed]** The player-facing surface must be unable to return hidden state (see [time-and-knowledge.md](time-and-knowledge.md)); the player MCP server is the natural test of that.
 
 ## Open

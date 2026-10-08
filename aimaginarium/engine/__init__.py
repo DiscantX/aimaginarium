@@ -2,14 +2,14 @@
 
 from .demo import PLAYER_ID, create_demo_world
 from .game import (
-    ChangesRejected, CheckCalled, Committed, Game, Narration, ReplyUnreadable, TurnEvent,
+    ChangesRejected, CheckCalled, Committed, Game, Narration, Repairing, ReplyUnreadable, Rolled, TurnEvent,
 )
-from .replies import CheckRequest, OutcomeReply, TurnReply
-from .rules import CLASSES, D20Rules, Roll
-from .view import render_state
+from .replies import CheckRequest, Factor, OutcomeReply, RepairReply, TurnReply
+from .rules import CLASSES, D20Rules, Roll, Ruling
+from .view import render_player_view, render_state
 
 __all__ = [
-    "CLASSES", "ChangesRejected", "CheckCalled", "CheckRequest", "Committed", "D20Rules", "Game", "Narration",
-    "OutcomeReply", "PLAYER_ID", "ReplyUnreadable", "Roll", "TurnEvent", "TurnReply", "create_demo_world",
-    "render_state",
+    "CLASSES", "ChangesRejected", "CheckCalled", "CheckRequest", "Committed", "D20Rules", "Factor", "Game", "Narration",
+    "OutcomeReply", "PLAYER_ID", "RepairReply", "Repairing", "ReplyUnreadable", "Roll", "Rolled", "Ruling", "TurnEvent", "TurnReply", "create_demo_world",
+    "render_player_view", "render_state",
 ]
