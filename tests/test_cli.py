@@ -1,6 +1,7 @@
 """Tests for the terminal client, with scripted input and output."""
 
 import asyncio
+import re
 
 from aimaginarium.api import LocalServer, Role
 from aimaginarium.cli import main, play
@@ -15,14 +16,14 @@ def run_session(game, inputs, opening=False, role=Role.PLAYER):
     lines = iter(inputs)
 
     async def ask(prompt):
-        asked.append(prompt)
+        asked.append(re.sub(r"\033\[[0-9;]*m", "", prompt))
         try:
             return next(lines)
         except StopIteration:
             raise EOFError
 
     def out(text="", end="\n"):
-        output.append(text + end)
+        output.append(re.sub(r"\033\[[0-9;]*m", "", text) + end)
 
     session = LocalServer(game, dev_enabled=True).connect(role)
     asyncio.run(play(session, ask, out, opening=opening))
@@ -57,7 +58,7 @@ def test_rejected_changes_are_explained_without_stopping():
 def test_opening_and_state_command_show_the_players_view_not_the_gms():
     game = fresh_game([reply(["A", "B", "C", "D", "E", "F", "G"])])
     _, text = run_session(game, ["/state", "/state gm", "/quit"], opening=True)
-    assert text.index("A\n\nB") < text.index("Location:") and "Marta:" in text
+    assert "G" in text and text.index("A") < text.index("Location:") and "Marta:" in text
     assert "[char-2]" not in text and "secret" not in text
 
 
@@ -138,3 +139,25 @@ def test_pending_input_is_flushed_on_unix_and_ignored_when_not_a_terminal(monkey
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True, raising=False)
     discard_pending_input()
     assert calls == [(7, 0)]
+
+
+def test_ctrl_c_at_the_prompt_leaves_cleanly():
+    async def ask(prompt):
+        raise KeyboardInterrupt
+
+    session = LocalServer(fresh_game([])).connect()
+    asyncio.run(play(session, ask, lambda text="", end="\n": None, opening=False))
+    assert session._closed
+
+
+def test_ctrl_c_at_the_roll_prompt_leaves_cleanly():
+    answers = iter(["I sneak."])
+
+    async def ask(prompt):
+        if "Press Enter" in prompt:
+            raise KeyboardInterrupt
+        return next(answers)
+
+    session = LocalServer(fresh_game([reply(["You creep."], check=stealth_check())])).connect()
+    asyncio.run(play(session, ask, lambda text="", end="\n": None, opening=False))
+    assert session._closed

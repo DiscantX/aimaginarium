@@ -24,7 +24,7 @@ from .api import (
 from .engine import Game, create_demo_world
 from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
 from .prompts import PromptBuilder
-from .ui.utils.spinner import Spinner
+from .ui.utils import Spinner, colorize, format_assistant_message, format_player_message
 from .world import WorldStore
 
 Ask = Callable[[str], Awaitable[str]]
@@ -88,6 +88,14 @@ async def render_reply(stream, out: Show) -> tuple[Optional[CheckCalled], Done]:
     spinner = Spinner()
     spinner.start()
     first, check, done = True, None, Done()
+    chunks: list[str] = []
+
+    def flush() -> None:
+        """Prints the narration received so far as one formatted message."""
+        if chunks:
+            out(format_assistant_message("".join(chunks)), end="")
+            chunks.clear()
+
     try:
         async for envelope in stream:
             event = envelope.event
@@ -95,26 +103,32 @@ async def render_reply(stream, out: Show) -> tuple[Optional[CheckCalled], Done]:
                 spinner.stop()
                 first = False
             if isinstance(event, Narration):
-                out(event.text, end="")
+                chunks.append(event.text)
             elif isinstance(event, CheckCalled):
+                flush()
                 out()
                 check = event
             elif isinstance(event, RollResult):
-                out(f"You rolled {event.die} {event.modifier:+d} = {event.total}.\n")
+                out(colorize(f"You rolled {event.die} {event.modifier:+d} = {event.total}.\n", "muted"))
             elif isinstance(event, Repairing):
+                flush()
                 spinner.start()
                 first = True
             elif isinstance(event, ChangesRejected):
+                flush()
                 why = f": {event.errors[0]}" if event.errors else ""
-                out(f"\n\n[Some changes were not accepted{why}. The world is unchanged.]", end="")
+                out(colorize(f"\n\n[Some changes were not accepted{why}. The world is unchanged.]", "muted"), end="")
             elif isinstance(event, ReplyUnreadable):
-                out(f"\n\n[{event.reason}]", end="")
+                flush()
+                out(colorize(f"\n\n[{event.reason}]", "muted"), end="")
             elif isinstance(event, CommandRejected):
-                out(f"\n[{event.message}]", end="")
+                flush()
+                out(colorize(f"\n[{event.message}]", "muted"), end="")
             elif isinstance(event, Done):
                 done = event
     finally:
         spinner.stop()
+        flush()
     return check, done
 
 
@@ -131,7 +145,7 @@ async def run_turn(session: Session, command, ask: Ask, out: Show) -> None:
         check, done = await render_reply(session.send(command), out)
         command = None
         if done.awaiting_roll and check is not None:
-            await ask(f"\n[{check.skill.title()} check, difficulty {check.difficulty}] Press Enter to roll... ")
+            await ask(colorize(f"\n[{check.skill.title()} check, difficulty {check.difficulty}] Press Enter to roll... ", "muted"))
             command = Roll()
     out("\n")
 
@@ -165,9 +179,8 @@ async def show_story(session: Session, out: Show) -> None:
     """Replays the story so far, for a game that was already begun."""
     view = next(e for e in await collect(session.send(GetPlayerView())) if isinstance(e, StateView))
     for part in view.data["story"]:
-        out(f"> {part['text']}" if part["speaker"] == "player" else part["text"])
-        if part["speaker"] == "narrator":
-            out()
+        format_message = format_player_message if part["speaker"] == "player" else format_assistant_message
+        out(format_message(part["text"]), end="")
 
 
 async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening: bool = True) -> None:
@@ -180,27 +193,31 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
         opening: Whether to narrate the opening scene first.
     """
     dev = session.role is Role.DEV
-    out("Type what you do. /state shows your situation" + (", /state gm the GM's view" if dev else "") + ", /quit leaves.\n")
-    if opening:
-        await run_turn(session, OpenScene(), ask, out)
-    else:
-        await show_story(session, out)
-    while True:
-        try:
-            text = (await ask("> ")).strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-        if text in ("/quit", "/exit"):
-            await collect(session.send(Quit()))
-            break
-        if text == "/state":
-            await show_state(session, out)
-        elif text == "/state gm" and dev:
-            await show_state(session, out, "gm")
-        elif text.startswith("/"):
-            out(f"Unknown command {text.split()[0]}.\n")
-        elif text:
-            await run_turn(session, SubmitAction(text), ask, out)
+    out(colorize("Type what you do. /state shows your situation" + (", /state gm the GM's view" if dev else "")
+                 + ", /quit leaves.\n", "muted"))
+    try:
+        if opening:
+            await run_turn(session, OpenScene(), ask, out)
+        else:
+            await show_story(session, out)
+        while True:
+            try:
+                text = (await ask(colorize("> ", "player"))).strip()
+            except (EOFError, KeyboardInterrupt):
+                text = "/quit"  # Ctrl+C and end of input leave the same way /quit does
+            if text in ("/quit", "/exit"):
+                await collect(session.send(Quit()))
+                break
+            if text == "/state":
+                await show_state(session, out)
+            elif text == "/state gm" and dev:
+                await show_state(session, out, "gm")
+            elif text.startswith("/"):
+                out(colorize(f"Unknown command {text.split()[0]}.\n", "muted"))
+            elif text:
+                await run_turn(session, SubmitAction(text), ask, out)
+    except (EOFError, KeyboardInterrupt):  # interrupted while the storyteller was working or at a roll prompt
+        pass
     await session.close()
 
 
@@ -244,6 +261,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
+    except (EOFError, KeyboardInterrupt):
+        pass
     finally:
         store.close()
     return 0
