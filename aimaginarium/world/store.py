@@ -19,7 +19,8 @@ from pydantic import ValidationError
 
 from .apply import apply_event, dumps
 from .changes import Change, parse_changes
-from .models import ChangeError, CommitError, CommitResult, Entity, Event, Fact, Rejected
+from .effective import EFFECTIVE, RETRACTED_KIND
+from .models import ChangeError, CommitError, CommitResult, Entity, Event, Fact, Rejected, UndoError
 from .plan import Planner
 from .schema import LOG_SCHEMA, SCHEMA_VERSION, STATE_SCHEMA
 
@@ -133,6 +134,57 @@ class WorldStore:
             conn.execute("ROLLBACK")
             raise
         return CommitResult(tuple(events), dict(planner.refs))
+
+    # -- taking a turn back ---------------------------------------------
+
+    def last_turn(self) -> Optional[int]:
+        """The latest turn that has not been taken back, or None."""
+        row = self._conn.execute(
+            f"SELECT MAX(e.turn_id) FROM events e WHERE e.turn_id IS NOT NULL AND {EFFECTIVE}").fetchone()
+        return row[0]
+
+    def retract_turn(self, turn: int, *, actor: str, carried_die: Optional[int] = None) -> Event:
+        """Takes back a turn: logs ``turn.retracted`` and rebuilds the state from the effective log.
+
+        Nothing is deleted. Only the latest turn can be taken back, because later
+        turns may depend on it. Ids and turn numbers are never reused, since
+        their counters are not rewound.
+
+        Args:
+            turn: The turn to take back; must be :meth:`last_turn`.
+            actor: Who is doing it.
+            carried_die: The die rolled in that turn, to be reused by the next check
+                so that undo cannot be used to reroll.
+
+        Returns:
+            The ``turn.retracted`` event.
+
+        Raises:
+            UndoError: If ``turn`` is not the latest turn that has not been taken back.
+        """
+        conn = self._conn
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if turn != self.last_turn():
+                raise UndoError(f"turn {turn} is not the latest turn, so it cannot be taken back")
+            cursor = conn.execute(
+                "INSERT INTO events (turn_id, actor_id, kind, world_time, payload, created_at) "
+                "VALUES (NULL, ?, ?, NULL, ?, ?)",
+                (actor, RETRACTED_KIND, dumps({"turn": turn, "die": carried_die}), datetime.now(timezone.utc).isoformat()),
+            )
+            self._rebuild_state()
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        return self.get_event(cursor.lastrowid)
+
+    def _rebuild_state(self) -> None:
+        """Replaces the state tables with the result of replaying the effective log."""
+        for table in ("fact_knowers", "facts", "connections", "entities"):
+            self._conn.execute(f"DELETE FROM {table}")
+        for event in self.events():
+            apply_event(self._conn, event.seq, event.kind, event.payload)
 
     # -- reading entities ------------------------------------------------
 
@@ -267,9 +319,17 @@ class WorldStore:
         entity: Optional[str] = None,
         turn: Optional[int] = None,
         limit: Optional[int] = None,
+        include_retracted: bool = False,
     ) -> list[Event]:
-        """Events in commit order. ``entity`` selects every event that touched that entity."""
+        """Events in commit order. ``entity`` selects every event that touched that entity.
+
+        By default this is the *effective* log: events of turns that were taken
+        back are left out (see :mod:`.effective`). Pass ``include_retracted``
+        for the raw log, such as a dev panel that greys them out.
+        """
         sql, args = "SELECT e.* FROM events e WHERE e.seq > ?", [after]
+        if not include_retracted:
+            sql += f" AND {EFFECTIVE}"
         if kind is not None:
             sql += " AND e.kind = ?"
             args.append(kind)

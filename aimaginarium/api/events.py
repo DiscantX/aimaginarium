@@ -163,11 +163,17 @@ class TraceEvent(ApiEvent):
     Attributes:
         kind: What it was, such as ``"llm.call"`` or ``"check.workings"``.
         payload: Its details.
+        trace_seq: Its position in the trace (separate from the envelope ``seq``).
+        at: When it happened, UTC, ISO 8601.
+        turn_id: The turn it belongs to, if any.
     """
 
     roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
     kind: str
     payload: dict
+    trace_seq: int = 0
+    at: str = ""
+    turn_id: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -188,7 +194,8 @@ class Envelope:
     """An event with its place in the stream.
 
     Attributes:
-        seq: Position in the session's stream, increasing by one.
+        seq: Position in the server's log, increasing by one. A role that may not
+            see some events sees gaps where they were.
         turn_id: The turn the event belongs to, or None.
         event: The event.
     """

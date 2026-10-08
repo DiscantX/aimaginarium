@@ -33,13 +33,15 @@
 
 This replaces the dev-tools item previously in [../open-questions.md](../open-questions.md).
 
+**As built (#58)**, `aimaginarium/trace.py`: a `Tracer` hands `TraceRecord`s (own sequence number, UTC time, turn id, kind, payload) to sinks and keeps the latest 2000 in memory. Sinks so far: a JSON-lines file (`--trace PATH`) and, for a server with the dev role enabled, the API log, so dev sessions receive `TraceEvent`s through `subscribe` and can backfill with `GetTrace(since, limit, turn)`. Players never receive them. Kinds written: `llm.call` (full system prompt, messages, raw reply, model, tokens, cached tokens, latency, time to first token, recipe and variant), `llm.failed`, `llm.retry`, `llm.fallback` (with whether the candidate went on cool-down), `reply.invalid`, `check.workings` (tier, factors, difficulty, roll, total, classification), `changes.proposed`, `changes.accepted`, `changes.rejected`, `state.diff`. A failing sink is dropped, never allowed to break a turn. In the terminal, the dev role's `/inspect [turn] [full]` prints a turn as a timeline. Not built yet: dropped or flagged highlight mentions (they wait for the highlighting design).
+
 ### The contract (built in #56, `aimaginarium/api/`)
 
 **[Decided]** A check pauses the turn through **one path only**: an explicit `Roll` command. `send(SubmitAction)` streams the turn up to `CheckCalled` and ends with `Done(awaiting_roll=True)`; `send(Roll)` continues it with `RollResult`, the outcome narration and the commit. Built in #57: the engine's turn ends at `CheckCalled` and `Game.resolve_check()` continues it, so remote and in-process clients behave alike.
 
 **[Proposed]** The rest of the shape:
 
-- **Commands.** Player path: `OpenScene`, `SubmitAction(text)`, `Roll`. System path: `GetPlayerView`, `Quit`, and dev-only `Undo`, `GetState(perspective)`, `GetTrace(since, limit)`. There are no in-game verbs.
+- **Commands.** Player path: `OpenScene`, `SubmitAction(text)`, `Roll`. System path: `GetPlayerView`, `Quit`, and dev-only `Undo`, `GetState(perspective)`, `GetTrace(since, limit, turn)`. There are no in-game verbs.
 - **Events.** Every reply stream ends with `Done`. The terminal's turn events carry over (`Narration`, `CheckCalled`, `Repairing`, `ChangesRejected`, `ReplyUnreadable`); `Committed` becomes `StateChanged`, and `RollResult`, `CommandRejected`, `StateView`, `TurnRetracted` and the dev-only `TraceEvent` are new. Each is wrapped in an `Envelope` with a sequence number and turn id.
 - **Roles are enforced in one place.** Each event class lists the roles that may see it, and fields only the dev role may see are marked `dev_only`; `for_role` strips them. Dev-only today: the GM's `reason` and the difficulty workings on `CheckCalled`, the raw errors on `ChangesRejected`, the raw changes on `StateChanged`, and the GM state view.
 - **Protocols.** `Server.connect(role)` returns a `Session` with `send`, `subscribe` and `close`. Asking for the dev role while config disables it raises `RoleError`.
@@ -58,6 +60,8 @@ This replaces the dev-tools item previously in [../open-questions.md](../open-qu
 - Entity ids are not reused after an undo, so ids in the trace stay unambiguous.
 - A retried turn reuses the recorded roll, so undo cannot be used to reroll.
 - Full replay is fine at prototype scale; checkpoints can come later.
+
+**As built (#59):** `aimaginarium/world/effective.py` holds the one definition of the effective log, and `WorldStore.events()` returns it by default (`include_retracted=True` gives the raw log for dev panels). `Game._load_history`, `verify_replay`, `begun` and every other reader therefore skip retracted turns without doing anything themselves. `WorldStore.retract_turn` appends `turn.retracted`, rewinds nothing (id and turn counters stay, so ids are never reused) and rebuilds the state tables by replaying the effective log, in one transaction; it refuses any turn but the latest. `Game.undo()` also drops a pending check and reloads the history. The recorded roll: every `check.requested` event now stores its die, and undoing a turn carries that die to the next check (a stack, so dice come back in the order turns are replayed; a die is carried until a kept check uses it). Undoing the opening scene lets the story begin again. Dev role only: the API's `Undo` answers with `TurnRetracted` and `StateChanged` (the latter without its raw changes), and the terminal's dev `/undo` calls it. Still open: greying out retracted turns in the Textual panels, and whether players ever get undo.
 
 **[Proposed]** **Dry-run replay** never touches the live world. It copies the pre-turn state into a scratch database and re-runs the turn with a different model, prompt variant or edited prompt, then shows a diff. It is the same mechanism as the cloned databases in the A/B idea (see [../tech/evaluation-and-replay.md](../tech/evaluation-and-replay.md)), so it is built once.
 

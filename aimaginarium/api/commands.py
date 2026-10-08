@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, ClassVar, Mapping
+from typing import Any, ClassVar, Mapping, Optional
 
 from .roles import Role, RoleError
 
@@ -143,13 +143,15 @@ class GetTrace(Command):
     """Asks for recorded trace events (dev only).
 
     Attributes:
-        since: Return only events after this sequence number.
+        since: Return only events after this trace sequence number.
         limit: Most events to return.
+        turn: If given, only events of that turn.
     """
 
     roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
     since: int = 0
     limit: int = 200
+    turn: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.since < 0 or self.limit < 1:
