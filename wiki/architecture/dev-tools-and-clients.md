@@ -37,7 +37,7 @@ This replaces the dev-tools item previously in [../open-questions.md](../open-qu
 
 ### The contract (built in #56, `aimaginarium/api/`)
 
-**[Decided]** A check pauses the turn through **one path only**: an explicit `Roll` command. `send(SubmitAction)` streams the turn up to `CheckCalled` and ends with `Done(awaiting_roll=True)`; `send(Roll)` continues it with `RollResult`, the outcome narration and the commit. Built in #57: the engine's turn ends at `CheckCalled` and `Game.resolve_check()` continues it, so remote and in-process clients behave alike.
+**[Decided]** A check pauses the turn through **one path only**: an explicit `Roll` command. `send(SubmitAction)` streams the turn up to `CheckCalled` and ends with `Done(awaiting_roll=True)`; `send(Roll)` continues it with `RollResult`, the outcome narration and the commit. `RollResult` carries the engine's `classification` (critical failure, failure, narrow success, success, critical success) so no client judges the total itself; ties succeed ("equals or exceeds", D&D 2024) and a natural 1 or 20 is critical whatever the total (#71). Built in #57: the engine's turn ends at `CheckCalled` and `Game.resolve_check()` continues it, so remote and in-process clients behave alike.
 
 **[Proposed]** The rest of the shape:
 

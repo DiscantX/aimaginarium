@@ -8,14 +8,10 @@ import threading
 import time
 from typing import IO, Any, Optional, Sequence
 
-DEFAULT_MESSAGES = (
-    "Consulting the dark oracle...",
-    "Rolling hidden 20-sided dice...",
-    "Inspecting ancient scrolls...",
-    "Summoning the dungeon master...",
-)
+from ...waiting import SPIN_FRAMES, WAITING_MESSAGES
 
-SPIN_SYMBOLS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+DEFAULT_MESSAGES = WAITING_MESSAGES
+SPIN_SYMBOLS = SPIN_FRAMES
 
 
 class Spinner:

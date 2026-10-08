@@ -281,3 +281,12 @@ def test_player_view_hides_ids_and_secrets_the_character_does_not_know(store):
     assert "char-2" not in text and "loc-2" not in text and "secret" not in text.lower()
     assert [t["name"] for t in view["here"]] == ["Marta", "Rusty key"] and view["carrying"][0]["name"] == "Shortsword"
     assert view["character"]["skills"]["athletics"] == 3 and view["exits"][0]["to"] == "Market Square"
+
+
+def test_classify_follows_the_2024_tie_rule_and_the_criticals():
+    from aimaginarium.engine.rules import classify
+    assert classify(10, 0) == "narrow_success"        # equals the difficulty: a success
+    assert classify(10, -1) == "failure"
+    assert classify(10, 3) == "success"               # narrow only below 3 points
+    assert classify(1, 8) == "critical_failure"       # a natural 1 fails whatever the total
+    assert classify(20, -8) == "critical_success"     # a natural 20 succeeds whatever the total

@@ -160,7 +160,7 @@ class LocalServer:
             return CheckCalled(item.roll.skill, item.roll.difficulty, item.reason, workings)
         if isinstance(item, eng.Rolled):
             r = item.roll
-            return RollResult(r.skill, r.die, r.modifier, r.total, r.difficulty)
+            return RollResult(r.skill, r.die, r.modifier, r.total, r.difficulty, r.classification)
         if isinstance(item, eng.Committed):
             return StateChanged(tuple({"seq": e.seq, "kind": e.kind, "payload": e.payload} for e in item.events))
         if isinstance(item, eng.Repairing):

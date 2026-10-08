@@ -15,6 +15,19 @@ from ...api import CheckCalled, RollResult
 
 DIE_SIDES = 20
 
+LABELS = {
+    "critical_failure": "Critical failure",
+    "failure": "Failure",
+    "narrow_success": "Narrow success",
+    "success": "Success",
+    "critical_success": "Critical success",
+}
+
+
+def label(classification: str) -> str:
+    """A classification as words for the player."""
+    return LABELS.get(classification, classification.replace("_", " ").capitalize())
+
 
 class Dice(Digits):
     """A big number that tumbles. Its face is a pure function of ``progress``, so an animation can land on any value."""
@@ -118,12 +131,12 @@ class RollScreen(ModalScreen[None]):
         r = self.result
         dice = self.query_one(Dice)
         dice.progress = dice.target_for(r.die, 0)
-        dice.set_class(r.die == dice.sides, "max")
-        dice.set_class(r.die == 1, "min")
-        won = r.total >= r.difficulty
+        won = r.classification.endswith("success")
+        dice.set_class(r.classification == "critical_success", "max")
+        dice.set_class(r.classification == "critical_failure", "min")
         self.query_one("#breakdown").update(f"{r.die} {r.modifier:+d} = {r.total}  (needed {r.difficulty})")
         verdict = self.query_one("#verdict")
-        verdict.update("Success" if won else "Failure")
+        verdict.update(label(r.classification))
         verdict.set_class(won, "success")
         verdict.set_class(not won, "failure")
         self.query_one("#breakdown").styles.animate("opacity", 1.0, duration=0.4)

@@ -107,8 +107,9 @@ def test_done_marks_a_paused_turn():
     assert Done().awaiting_roll is False
 
 
-def test_roll_result_carries_the_visible_numbers():
-    assert {f.name for f in dataclasses.fields(RollResult)} == {"skill", "die", "modifier", "total", "difficulty"}
+def test_roll_result_carries_the_visible_numbers_and_the_ruling():
+    assert {f.name for f in dataclasses.fields(RollResult)} == {
+        "skill", "die", "modifier", "total", "difficulty", "classification"}
 
 
 def test_protocols_are_importable_and_runtime_checkable():

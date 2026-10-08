@@ -18,6 +18,30 @@ TIERS = {"very_easy": 5, "easy": 10, "medium": 15, "hard": 20, "very_hard": 25, 
 SIZES = {"small": 1, "medium": 2, "large": 4}
 MAX_ADJUSTMENT = 6
 CLASSES = ("critical_failure", "failure", "narrow_success", "success", "critical_success")
+DEFAULT_NARROW = 3
+
+
+def classify(die: int, margin: int, narrow: int = DEFAULT_NARROW) -> str:
+    """Classifies a d20 roll.
+
+    A natural 1 or 20 is critical whatever the total; otherwise a total below the difficulty fails, a tie or better
+    succeeds, and a success by fewer than ``narrow`` points is narrow.
+
+    Args:
+        die: The natural die.
+        margin: The total minus the difficulty.
+        narrow: A success by fewer points than this is narrow.
+
+    Returns:
+        One of :data:`CLASSES`.
+    """
+    if die == 1:
+        return "critical_failure"
+    if die == 20:
+        return "critical_success"
+    if margin < 0:
+        return "failure"
+    return "narrow_success" if margin < narrow else "success"
 
 
 @dataclass(frozen=True)
@@ -74,7 +98,7 @@ class D20Rules:
     difficulty by less than ``narrow`` is a narrow success.
     """
 
-    def __init__(self, rng: Optional[random.Random] = None, narrow: int = 3):
+    def __init__(self, rng: Optional[random.Random] = None, narrow: int = DEFAULT_NARROW):
         """Initialises the rules.
 
         Args:
@@ -122,12 +146,5 @@ class D20Rules:
         modifier = self.modifier(character, skill)
         total = die + modifier
         margin = total - difficulty
-        if die == 1:
-            kind = "critical_failure"
-        elif die == 20:
-            kind = "critical_success"
-        elif margin < 0:
-            kind = "failure"
-        else:
-            kind = "narrow_success" if margin < self.narrow else "success"
+        kind = classify(die, margin, self.narrow)
         return Roll(skill, die, modifier, total, difficulty, margin, kind)

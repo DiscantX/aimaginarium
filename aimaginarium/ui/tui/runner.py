@@ -8,15 +8,14 @@ from ...api import (
     ChangesRejected, CheckCalled, CommandRejected, Done, Narration, Repairing, ReplyUnreadable, Roll, RollResult,
     Session,
 )
-from .roll import RollScreen
+from .roll import RollScreen, label
 from .story import StoryLog
 
 
 def roll_line(result: RollResult) -> str:
     """The roll as one line of the log."""
-    verdict = "success" if result.total >= result.difficulty else "failure"
     return (f"{result.skill.title()}: rolled {result.die} {result.modifier:+d} = {result.total} "
-            f"against {result.difficulty}, {verdict}")
+            f"against {result.difficulty}, {label(result.classification).lower()}")
 
 
 class TurnRunner:

@@ -83,7 +83,7 @@ def test_a_check_turn_pauses_until_roll_and_hides_the_gms_workings_from_players(
         assert "roll" not in [e.kind for e in server.game.store.events()]
         second = await events(player.send(Roll()))
         assert kinds(second) == ["RollResult", "Narration", "Done"]
-        assert second[0].event == RollResult("stealth", 14, 1, 15, 12) and second[-1].event == Done(1, False)
+        assert second[0].event == RollResult("stealth", 14, 1, 15, 12, "success") and second[-1].event == Done(1, False)
 
     run(scenario())
     log = server._log
