@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-from aimaginarium.ui.utils.spinner import Spinner as RPGNarrativeLoader
+from aimaginarium.ui.cli.utils.spinner import Spinner as RPGNarrativeLoader
 from rpg_logger import RPGLogger  # 📥 Import your modular logger
 
 # Game configuration constraints

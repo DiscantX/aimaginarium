@@ -8,26 +8,20 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import shutil
 import sys
 import textwrap
-from pathlib import Path
 from typing import Awaitable, Callable, Optional, Sequence
 
-from dotenv import load_dotenv
-
-from .api import (
-    ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, LocalServer, Narration,
-    OpenScene, Quit, Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent,
-    TurnRetracted, Undo,
+from ...api import (
+    ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, Narration, OpenScene, Quit,
+    Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent, TurnRetracted,
+    Undo,
 )
-from .engine import Game, create_demo_world
-from .llm import ConfigError, FallbackNotice, RetryNotice, factory_from_file
-from .prompts import PromptBuilder
-from .trace import JsonlSink, Tracer, format_timeline
-from .ui.utils import Spinner, colorize, format_assistant_message, format_player_message
-from .world import WorldStore
+from ...llm import ConfigError
+from ...trace import format_timeline
+from ..bootstrap import Runtime, add_common_arguments
+from .utils import Spinner, colorize, format_assistant_message, format_player_message
 
 Ask = Callable[[str], Awaitable[str]]
 Show = Callable[..., None]
@@ -247,58 +241,23 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
     await session.close()
 
 
-def _open_world(path: Path) -> tuple[WorldStore, str, bool]:
-    """Opens the world file, filling it with the demo world if it is new.
-
-    Returns:
-        The store, the player's entity id, and whether the story has already begun.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    store = WorldStore.open(path)
-    if not store.find(kind="character"):
-        return store, create_demo_world(store), False
-    player = next(e for e in store.find(kind="character") if e.data.get("player"))
-    return store, player.id, bool(store.events(kind="llm.call"))
-
-
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Entry point for ``python -m aimaginarium`` and the ``aimaginarium`` command."""
+    """Entry point for the terminal client (``python -m aimaginarium --cli``)."""
     parser = argparse.ArgumentParser(description="Play AImaginarium in the terminal.")
-    parser.add_argument("--config", help="path to the TOML configuration (default: aimaginarium.toml)")
-    parser.add_argument("--world", default="worlds/demo.sqlite", help="world database file (created if missing)")
-    parser.add_argument("--dev", action="store_true", help="connect with the dev role (GM view, trace)")
-    parser.add_argument("--trace", help="append the trace (prompts, replies, timings, checks) to this JSON-lines file")
+    add_common_arguments(parser)
     args = parser.parse_args(argv)
-
-    load_dotenv()
-    tracer = Tracer()
-    if args.trace:
-        tracer.add_sink(JsonlSink(Path(args.trace)))
-
-    def retrying(notice) -> None:
-        print(f"[the storyteller is busy; retrying in {notice.delay:.0f}s]", file=sys.stderr)
-        tracer.on_retry(notice)
-
-    def falling_back(notice) -> None:
-        print(f"[{notice.failed} is unavailable; trying {notice.next}]", file=sys.stderr)
-        tracer.on_fallback(notice)
-
     try:
-        llm = factory_from_file(args.config, on_retry=retrying, on_fallback=falling_back)
+        runtime = Runtime.open(args)
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
-    store, player_id, begun = _open_world(Path(args.world))
     try:
-        game = Game(store, llm, PromptBuilder.from_directory(), player_id, tracer=tracer)
-        session = LocalServer(game, dev_enabled=args.dev).connect(Role.DEV if args.dev else Role.PLAYER)
-        asyncio.run(play(session, opening=not begun))
+        asyncio.run(play(runtime.session, opening=not runtime.begun))
     except ConfigError as exc:
         print(f"configuration problem: {exc}", file=sys.stderr)
         return 2
     except (EOFError, KeyboardInterrupt):
         pass
     finally:
-        tracer.close()
-        store.close()
+        runtime.close()
     return 0

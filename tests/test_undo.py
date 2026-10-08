@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from aimaginarium.api import LocalServer, Role, SubmitAction, Undo
-from aimaginarium.cli import play
+from aimaginarium.ui.cli import play
 from aimaginarium.engine import PLAYER_ID, D20Rules, Game, create_demo_world
 from aimaginarium.prompts import PromptBuilder
 from aimaginarium.world import UndoError, WorldStore, verify_replay

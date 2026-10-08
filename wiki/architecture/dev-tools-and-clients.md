@@ -71,7 +71,7 @@ This replaces the dev-tools item previously in [../open-questions.md](../open-qu
 
 ## Panels and layouts
 
-**[Decided]** The Textual UI uses the `textual-widgets` package (splitters for mouse-resizable panels) from the start. Textual has no built-in docking system; core provides layout primitives and CSS show and hide.
+**[Decided]** The Textual UI uses the `textual-widgets` package (splitters for mouse-resizable panels) from the start. Textual's `dock` style pins a widget to an edge (header, footer, input row); it has no drag-and-drop docking, so panel arrangement comes from layout presets and splitters. **[Decided]** All clients live under `aimaginarium/ui/` (`cli/`, `tui/`, later `web/`), sharing one startup in `ui/bootstrap.py`; the TUI is the first-class terminal client and the plain CLI is secondary (#66).
 
 **[Decided]** Player-facing gameplay panels (player stats, inventory, spell lists, possible quests, and similar information common in RPGs) are designed to be shared by the Textual and web UIs, separate from dev panels.
 

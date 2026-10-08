@@ -1,5 +1,5 @@
 """Lets ``python -m aimaginarium`` start the terminal client."""
 
-from .cli import main
+from .ui.cli import main
 
 raise SystemExit(main())

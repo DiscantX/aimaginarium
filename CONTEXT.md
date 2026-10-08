@@ -32,7 +32,7 @@ Statements are tagged **[Decided]** (Ficus stated or accepted), **[Proposed]** (
 - `wiki/story/`: storytelling essays
 - `wiki/architecture/`: core engine, action pipeline, time and knowledge, multiplayer and API
 - `wiki/tech/`: tech stack
-- `aimaginarium/`: the engine package (`srd/`, `world/`, `llm/`)
+- `aimaginarium/`: the engine package (`srd/`, `world/`, `llm/`, `api/`); clients in `ui/` (`cli/`, `tui/`)
 - `tests/`: the automated test suite
 - `local_llm/`: Ollama runner scripts and sample scripts (`sample/`), not part of the suite
 
