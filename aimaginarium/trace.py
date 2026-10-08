@@ -160,6 +160,8 @@ def _summary(kind: str, p: dict[str, Any]) -> str:
     if kind == "changes.rejected":
         first = p["errors"][0]["message"] if p.get("errors") else "?"
         return f"{len(p['errors'])} error(s)" + (" (repair failed)" if p.get("repaired") else "") + f": {first}"
+    if kind == "turn.retracted":
+        return f"turn {p['turn']} taken back" + (f"; its die ({p['carried_die']}) is carried to the next check" if p.get("carried_die") else "")
     if kind == "state.diff":
         return ", ".join(e["kind"] for e in p["events"]) or "no change"
     if kind == "check.workings":
