@@ -11,6 +11,7 @@ from ...llm import ConfigError
 from .dev import preview_roll
 from .inputs import ActionInput, PasteConfirm
 from .runner import TurnRunner
+from .settings import Settings
 from .story import StoryLog
 from .thinking import Thinking
 from .theme import CANDLELIT, ROLE_DEFAULTS
@@ -34,6 +35,7 @@ class GameApp(App):
     def __init__(self, session: Session, opening: bool = True) -> None:
         super().__init__()
         self.session, self.opening = session, opening
+        self.settings = Settings()
         self.runner: TurnRunner
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
