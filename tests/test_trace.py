@@ -6,7 +6,7 @@ import json
 import pytest
 
 from aimaginarium.api import GetTrace, LocalServer, Role, RoleError, SubmitAction, TraceEvent
-from aimaginarium.cli import play
+from aimaginarium.ui.cli import play
 from aimaginarium.engine import PLAYER_ID, create_demo_world
 from aimaginarium.llm import FallbackNotice, RetryNotice
 from aimaginarium.trace import JsonlSink, Tracer, format_timeline

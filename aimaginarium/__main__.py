@@ -1,5 +1,5 @@
-"""Lets ``python -m aimaginarium`` start the terminal client."""
+"""Lets ``python -m aimaginarium`` start the game (the Textual UI; ``--cli`` for the plain client)."""
 
-from .cli import main
+from .ui.launch import main
 
 raise SystemExit(main())

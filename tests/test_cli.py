@@ -4,7 +4,7 @@ import asyncio
 import re
 
 from aimaginarium.api import LocalServer, Role
-from aimaginarium.cli import main, play
+from aimaginarium.ui.cli import main, play
 from engine_helpers import make_game, reply, stealth_check
 from aimaginarium.engine import PLAYER_ID, create_demo_world, Game
 from aimaginarium.prompts import PromptBuilder
@@ -112,7 +112,7 @@ def test_conversation_history_persists_across_restart():
 def test_pending_input_is_discarded_on_windows(monkeypatch):
     import sys
     import types
-    from aimaginarium.cli import discard_pending_input
+    from aimaginarium.ui.cli import discard_pending_input
 
     keys = list("\r\r\r")
     fake = types.SimpleNamespace(kbhit=lambda: bool(keys), getwch=lambda: keys.pop())
@@ -126,7 +126,7 @@ def test_pending_input_is_discarded_on_windows(monkeypatch):
 def test_pending_input_is_flushed_on_unix_and_ignored_when_not_a_terminal(monkeypatch):
     import sys
     import types
-    from aimaginarium.cli import discard_pending_input
+    from aimaginarium.ui.cli import discard_pending_input
 
     calls = []
     fake = types.SimpleNamespace(tcflush=lambda fd, how: calls.append((fd, how)), TCIFLUSH=0)

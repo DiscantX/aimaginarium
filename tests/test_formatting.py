@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aimaginarium.ui.utils import format_assistant_message, format_player_message, colorize, set_stylesheet, Stylesheet
+from aimaginarium.ui.cli.utils import format_assistant_message, format_player_message, colorize, set_stylesheet, Stylesheet
 
 
 def test_format_assistant_message_basic():
