@@ -265,9 +265,10 @@ def test_a_turn_fills_the_trace_the_diffs_and_the_checks():
             assert {"llm.call", "check.workings", "changes.accepted", "state.diff"} <= set(kinds)
             assert app.query_one(TraceTimeline).query_one(DataTable).row_count == len(kinds)
             check = app.query_one(ChecksPanel).query_one(Tree).root.children[0]
-            assert "stealth" in str(check.label) and "difficulty 12" in str(check.label)
-            assert any("creaking floor" in str(leaf.label) for leaf in check.children)
-            assert "create" in str(app.query_one(DiffPanel).query_one(Tree).root.children[0].label)
+            assert check.data["skill"] == "stealth" and check.data["difficulty"] == 12
+            assert any("creaking floor" in leaf.data for leaf in check.children)
+            diff = app.query_one(DiffPanel).query_one(Tree).root.children[0]
+            assert any(leaf.data["kind"] == "entity.create" or "create" in leaf.data["kind"] for leaf in diff.children)
     run(scenario)
 
 
@@ -394,4 +395,73 @@ def test_the_trace_table_and_detail_can_be_resized_by_dragging_the_splitter():
             await pilot.mouse_up(None, offset=(x, y + 4))
             await pilot.pause()
             assert table.outer_size.height == before + 4
+    run(scenario)
+
+
+def test_pretty_shows_newlines_as_visible_blocks_and_raw_keeps_them_escaped():
+    from aimaginarium.ui.tui.panels.pretty import pretty, raw
+    payload = {"system": "You are the GM.\nBe brief.", "model": "m", "n": 3, "messages": [{"role": "user", "content": "a\nb"}]}
+    text = pretty(payload).plain
+    assert "system:\n  │ You are the GM.↵\n  │ Be brief." in text      # real newlines, each marked
+    assert 'model: "m"' in text and "n: 3" in text and "[0]:" in text
+    assert "\\n" in raw(payload) and "↵" not in raw(payload)            # raw is the exact JSON
+
+
+def test_the_trace_detail_switches_between_pretty_and_raw_and_copies_the_raw_json():
+    async def scenario():
+        app = make_app([reply(["Marta smiles."])], role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            await act(pilot, "I greet Marta.")
+            await until(pilot, lambda: texts(app, "narration"))
+            timeline = app.query_one(TraceTimeline)
+            await until(pilot, lambda: timeline.selected is not None and timeline.shown)
+            assert "↵" in timeline.shown and "│ " in timeline.shown            # the prompt reads as blocks
+            timeline.query_one(DataTable).focus()
+            await pilot.press("p")
+            assert "↵" not in timeline.shown and "\\n" in timeline.shown       # raw: exact JSON, escaped
+            assert "\\n" in timeline.copy_text()
+    run(scenario)
+
+
+def test_diff_and_check_lines_are_cut_to_the_panel_width_and_the_full_entry_shows_below():
+    from aimaginarium.ui.tui.panels.events import fit
+    assert fit("a  b\nc", 20) == "a b c" and fit("x" * 50, 10) == "x" * 9 + "…"
+
+    async def scenario():
+        app = make_app([reply(["You find a coin."], changes=CREATE)], role=Role.DEV)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await act(pilot, "I look.")
+            panel = app.query_one(DiffPanel)
+            await until(pilot, lambda: panel.query_one(Tree).root.children)
+            from textual.widgets import TabbedContent
+            app.query_one(TabbedContent).active = "tab-diffpanel"                 # a hidden tab has no width yet
+            await pilot.pause(0.4)
+            leaf = panel.query_one(Tree).root.children[0].children[0]
+            assert len(str(leaf.label)) <= panel.query_one(Tree).size.width
+            panel.query_one(Tree).move_cursor(leaf)
+            await until(pilot, lambda: "Silver coin" in panel.shown)
+    run(scenario)
+
+
+def test_the_state_tab_toggle_does_not_take_over_the_panel():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            from textual.widgets import TabbedContent
+            app.query_one(TabbedContent).active = "tab-stateinspector"
+            await pilot.pause(0.3)
+            assert app.query_one(StateInspector).query_one(".toggle").outer_size.height <= 3
+    run(scenario)
+
+
+def test_the_log_tab_receives_records_from_any_logger_and_the_dev_log_command():
+    import logging
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test() as pilot:
+            pane = app.query_one(LogPane)
+            logging.getLogger("httpx").info("HTTP Request: POST https://example.test 200 OK")   # a library, not ours
+            await act(pilot, "/log warning something odd")
+            await until(pilot, lambda: len(pane.shown) == 2)
+            assert "httpx" in pane.shown[0] and "something odd" in pane.shown[1]
     run(scenario)

@@ -21,8 +21,9 @@ class StateInspector(DevPanel):
     raw = ""
     """The text currently shown, without styling."""
     DEFAULT_CSS = """
-    StateInspector RadioSet { layout: horizontal; height: auto; border: none; background: transparent; }
-    StateInspector VerticalScroll { height: 1fr; padding: 0 1; }
+    StateInspector .toggle { height: auto; }
+    StateInspector RadioSet { layout: horizontal; width: auto; height: auto; border: none; background: transparent; }
+    StateInspector #body { height: 1fr; padding: 0 1; }
     """
 
     def compose(self) -> ComposeResult:
@@ -30,7 +31,7 @@ class StateInspector(DevPanel):
             with RadioSet():
                 yield RadioButton("GM", value=True, id="gm")
                 yield RadioButton("Player", id="player")
-        with VerticalScroll():
+        with VerticalScroll(id="body"):
             yield Static("", id="view")
 
     def on_mount(self) -> None:

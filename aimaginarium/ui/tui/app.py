@@ -75,20 +75,28 @@ class GameApp(App):
         self.runner = TurnRunner(self, self.session, self.story, self._set_busy)
         self.query_one(ActionInput).focus()
         if self.session.role is Role.DEV:
-            self.sub_title = "dev: /roll, /undo, F2 panels"
-            self.log_handler = TuiLogHandler(self)
-            logger = logging.getLogger("aimaginarium")
-            logger.addHandler(self.log_handler)
-            logger.setLevel(logging.DEBUG)
+            self.sub_title = "dev: /roll, /undo, /log, F2 panels"
+            self._watch_logs()
         self.run_worker(self._follow(), group="follow")
         if self.opening:
             self._start(OpenScene())
         else:
             await self._replay()
 
+    def _watch_logs(self) -> None:
+        """Feeds every Python log record (ours and the libraries', e.g. httpx) to the Log tab, dev role only."""
+        root = logging.getLogger()
+        self._root_level = root.level
+        self.log_handler = TuiLogHandler(self)
+        root.addHandler(self.log_handler)
+        root.setLevel(min(root.level or logging.INFO, logging.INFO) if root.level else logging.INFO)
+        logging.getLogger("aimaginarium").setLevel(logging.DEBUG)
+
     def on_unmount(self) -> None:
         if self.log_handler is not None:
-            logging.getLogger("aimaginarium").removeHandler(self.log_handler)
+            root = logging.getLogger()
+            root.removeHandler(self.log_handler)
+            root.setLevel(self._root_level)
 
     async def _follow(self) -> None:
         """Passes every envelope the session streams on to the story and the dev panels."""
@@ -148,6 +156,8 @@ class GameApp(App):
             self.run_worker(preview_roll(self, self.story, text.split()[1:]))
         elif text == "/undo" and self.session.role is Role.DEV:
             await self.action_undo()
+        elif text.split()[:1] == ["/log"] and self.session.role is Role.DEV:
+            self._log_test(text.split()[1:])
         elif text.startswith("/"):
             self.story.add(f"Unknown command {text.split()[0]}.", "system")
         elif text:
@@ -169,6 +179,12 @@ class GameApp(App):
         async for envelope in self.session.send(Undo()):
             if isinstance(envelope.event, CommandRejected):
                 self.notify(envelope.event.message, severity="warning")
+
+    def _log_test(self, args: list[str]) -> None:
+        """``/log [debug|info|warning|error] message``: writes a test record, to check the Log tab."""
+        level = args[0].upper() if args and args[0].upper() in ("DEBUG", "INFO", "WARNING", "ERROR") else "INFO"
+        words = args[1:] if args and args[0].upper() == level else args
+        logging.getLogger("aimaginarium.tui").log(getattr(logging, level), " ".join(words) or "test message")
 
     def action_preview_roll(self) -> None:
         if self.session.role is Role.DEV:

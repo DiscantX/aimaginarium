@@ -1,10 +1,10 @@
 """The trace timeline: every thing the engine and the models did, with the full payload of the selected row."""
 
-import json
 from datetime import datetime
 
 from rich.syntax import Syntax
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Static
 from textual_widgets import HorizontalSplitter
@@ -12,13 +12,19 @@ from textual_widgets import HorizontalSplitter
 from ....api import Envelope, TraceEvent
 from ....trace import summarize
 from . import DevPanel, dev_panel
+from .pretty import pretty, raw
 
 
 @dev_panel
 class TraceTimeline(DevPanel):
-    """A row per trace record (turn, offset, kind, summary); the highlighted row's payload shows underneath."""
+    """A row per trace record (turn, offset, kind, summary); the highlighted row's payload shows underneath.
+
+    The payload is shown *pretty* by default (multi-line strings as blocks, each real newline marked ``↵``)
+    or *raw* (the exact JSON, newlines as ``\\n``); ``p`` switches, ``c`` copies the raw JSON.
+    """
 
     title = "Trace"
+    BINDINGS = [Binding("p", "toggle_pretty", "Pretty / raw")]
     DEFAULT_CSS = """
     TraceTimeline #trace-rows { height: 2fr; }
     TraceTimeline #detail { height: 1fr; padding: 0 1; }
@@ -27,6 +33,9 @@ class TraceTimeline(DevPanel):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.records: dict[str, TraceEvent] = {}
+        self.pretty_mode = True
+        self.selected: TraceEvent | None = None
+        self.shown = ""
         self._start: datetime | None = None
 
     def compose(self) -> ComposeResult:
@@ -52,7 +61,24 @@ class TraceTimeline(DevPanel):
         table.scroll_end(animate=False)
 
     def on_data_table_row_highlighted(self, message: DataTable.RowHighlighted) -> None:
-        event = self.records.get(message.row_key.value or "")
-        if event is not None:
-            body = json.dumps(event.payload, indent=2, default=str, ensure_ascii=False)
-            self.query_one("#payload", Static).update(Syntax(body, "json", word_wrap=True, background_color="default"))
+        self.selected = self.records.get(message.row_key.value or "")
+        self._show()
+
+    def action_toggle_pretty(self) -> None:
+        self.pretty_mode = not self.pretty_mode
+        self._show()
+
+    def _show(self) -> None:
+        if self.selected is None:
+            return
+        payload = self.query_one("#payload", Static)
+        if self.pretty_mode:
+            text = pretty(self.selected.payload)
+            self.shown = text.plain
+            payload.update(text)
+        else:
+            self.shown = raw(self.selected.payload)
+            payload.update(Syntax(self.shown, "json", word_wrap=True, background_color="default"))
+
+    def copy_text(self) -> str:
+        return raw(self.selected.payload) if self.selected else ""
