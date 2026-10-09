@@ -33,10 +33,11 @@ def test_subtitle_combines_class_and_level():
     assert PartyMember("a", "A", level=2).subtitle == "Level 2"
 
 
-def test_a_demo_party_keeps_the_player_first_and_is_clamped_to_one_to_eight():
+def test_a_demo_party_keeps_the_player_first_and_can_be_any_size():
     player = PartyMember("self", "Kael", mine=True)
     assert [m.name for m in demo_party(player, 1)] == ["Kael"]
     assert len(demo_party(player, 0)) == 1
-    assert len(demo_party(player, 99)) == 8
+    big = demo_party(player, 20)
+    assert len(big) == 20 and len({m.id for m in big}) == 20 and len({m.name for m in big}) == 20  # repeats are numbered
     first = demo_party(player, 3)[0]
     assert first.mine and first.hp == 24  # blanks are filled with stand-ins so the card can be judged
