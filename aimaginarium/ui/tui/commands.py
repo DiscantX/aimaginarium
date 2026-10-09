@@ -29,3 +29,26 @@ class DevCommands(Provider):
             score = matcher.match(name)
             if score > 0:
                 yield Hit(score, matcher.highlight(name), callback, help=help_text)
+
+
+class PlayerCommands(Provider):
+    """Out-of-character commands for every role: layout choices of the player panels."""
+
+    def _entries(self):
+        app = self.app
+        side = "top" if app.settings.party_placement == "right" else "right"
+        return [
+            ("Toggle party bar", "Show or hide the party bar (F3)", app.action_toggle_party),
+            (f"Move party bar to the {side}", "Switch between a row under the header and a column", app.action_move_party),
+        ]
+
+    async def discover(self) -> Hits:
+        for name, help_text, callback in self._entries():
+            yield DiscoveryHit(name, callback, help=help_text)
+
+    async def search(self, query: str) -> Hits:
+        matcher = self.matcher(query)
+        for name, help_text, callback in self._entries():
+            score = matcher.match(name)
+            if score > 0:
+                yield Hit(score, matcher.highlight(name), callback, help=help_text)

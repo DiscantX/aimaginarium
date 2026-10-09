@@ -142,13 +142,16 @@ A player-facing panel (it is not a dev panel and every role gets it). The data m
 
 **[Decided]** Each member carries a `controller` (`human`, `llm-mcp`, `llm-internal`), shown as a small tag (`AI`, `AI·MCP`) on the card. A member played by the LLM-as-player MCP, or by our own API key driving the other 1 to 7 members, is an ordinary player slot to the bar.
 
-**[Proposed]** Keys: `F3` focuses the bar; the arrows along its axis move the selection; `Enter` keeps it and returns to the input; `Esc` or `Home` selects the player's own character and returns to the input. Selection is a view change and sends no command.
+**[Decided]** `F3` toggles the party bar, overriding the automatic show-or-hide by party size (a party of one hidden, a larger party shown). The player's choice stays until they toggle again, even when the party grows or shrinks; showing the bar also focuses it, and hiding it returns the keyboard to the input. **[Proposed]** Other keys: `F4` focuses a shown bar; the arrows along its axis move the selection; `Enter` keeps it and returns to the input; `Esc` or `Home` selects the player's own character and returns to the input. Selection is a view change and sends no command.
 
-**[Proposed]** Until the engine has a party model, `party_from_view` builds the party from the player view (the player alone, with `class`, `level`, `hp`, `max_hp` and `statuses` filling the card when the character has them; a view that carries a `party` list uses that). A card shows `HP ?` and a dash for what the viewer may not know. The dev role can show 1 to 8 stand-in members with `/party [n|off]` or the palette entry, to judge the layout.
+**[Proposed]** The placement can be switched while playing from the command palette (`Move party bar to the right` or `... top`, open to every role) or with the dev command `/party right|top`; the party and the selection carry over. The config-file entry arrives with the layout work (#68).
+
+**[Proposed]** Until the engine has a party model, `party_from_view` builds the party from the player view (the player alone, with `class`, `level`, `hp`, `max_hp` and `statuses` filling the card when the character has them; a view that carries a `party` list uses that). A card shows `HP ?` and a dash for what the viewer may not know. The dev role can show any number of stand-in members with `/party [n|off]` (no upper limit, for trying large parties, summons and tagalongs) or the palette entry, to judge the layout.
 
 **[Open]**
 - What the viewer may see of members other than their own character (a projection question for the API, not the renderer).
 - What counts as a party member (summons? tagalong NPCs?).
 - The left character panel (#68), which will follow `GameApp.viewed`.
+- Whether the card background should carry meaning (for example a downed member, or whose turn it is in combat); it is unchanged for now, the selected card being the only one with a different background.
 - Collapse to a single row; whether the Notes panel is per character, with the controller deciding who writes.
 - The engine's party model and the cost of many AI-controlled members (see the single-writer note in [multiplayer](multiplayer-and-api.md)).

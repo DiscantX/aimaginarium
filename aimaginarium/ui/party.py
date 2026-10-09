@@ -114,14 +114,19 @@ _DEMO = [
 def demo_party(player: PartyMember, size: int = 4) -> list[PartyMember]:
     """Stand-in party for trying the layout (dev only): the player first, then made-up companions.
 
+    Past the seven built-in companions the list cycles, numbering the repeats (``Mira Vael 2``), so a layout can
+    be tried with any party size, for example many summons.
+
     Args:
         player: The player's own member, kept as the first card (blank fields are filled with stand-ins).
-        size: Total members, 1 to 8.
+        size: Total members, 1 or more.
     """
-    companions = [
-        PartyMember(id=f"demo-{i}", name=n, class_name=c, level=lv, hp=hp, max_hp=mx, statuses=st, controller=ctl)
-        for i, (n, c, lv, hp, mx, st, ctl) in enumerate(_DEMO)
-    ]
     player = replace(player, class_name=player.class_name or "Fighter", level=player.level or 3,
                      hp=player.hp if player.hp is not None else 24, max_hp=player.max_hp or 24)
-    return [player, *companions[: max(1, min(size, 8)) - 1]]
+    companions = []
+    for i in range(max(1, size) - 1):
+        n, c, lv, hp, mx, st, ctl = _DEMO[i % len(_DEMO)]
+        lap = i // len(_DEMO)
+        companions.append(PartyMember(id=f"demo-{i}", name=n if not lap else f"{n} {lap + 1}", class_name=c, level=lv,
+                                      hp=hp, max_hp=mx, statuses=st, controller=ctl))
+    return [player, *companions]

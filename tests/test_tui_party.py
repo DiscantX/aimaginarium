@@ -75,13 +75,13 @@ def test_keyboard_moves_the_selection_and_escape_returns_to_the_players_characte
         async with app.run_test(size=(120, 36)) as pilot:
             app.set_demo_party(3)
             await until(pilot, lambda: len(bar(app).cards()) == 3)
-            await pilot.press("f3")
+            await pilot.press("f4")
             assert bar(app).has_focus
             await pilot.press("right", "right", "right")  # clamped at the last member
             assert app.viewed.id == bar(app).members[-1].id
             await pilot.press("escape")
             assert app.viewed.mine and app.query_one(ActionInput).has_focus
-            await pilot.press("f3", "right", "enter")
+            await pilot.press("f4", "right", "enter")
             assert not app.viewed.mine and app.query_one(ActionInput).has_focus  # enter keeps the selection
     run(scenario)
 
@@ -110,3 +110,53 @@ def test_the_bar_can_sit_on_the_right_and_an_unknown_placement_is_refused():
     run(scenario)
     with pytest.raises(ValueError):
         PartyBar("bottom")
+
+
+def test_f3_toggles_the_bar_over_the_automatic_choice_and_showing_it_focuses_it():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(120, 36)) as pilot:
+            await until(pilot, lambda: bar(app).members)
+            assert not bar(app).display  # a party of one is hidden
+            await pilot.press("f3")
+            assert bar(app).display and bar(app).has_focus  # shown on request, even for one member
+            await pilot.press("f3")
+            assert not bar(app).display and app.query_one(ActionInput).has_focus
+            app.set_demo_party(3)
+            await until(pilot, lambda: len(bar(app).cards()) == 3)
+            assert not bar(app).display  # the player's choice to hide stays when the party grows
+            await pilot.press("f3")
+            assert bar(app).display
+    run(scenario)
+
+
+def test_the_bar_moves_between_top_and_right_keeping_the_party_and_selection():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(120, 36)) as pilot:
+            app.set_demo_party(4)
+            await until(pilot, lambda: len(bar(app).cards()) == 4)
+            bar(app).select(bar(app).members[2].id)
+            await act(pilot, "/party right")
+            await until(pilot, lambda: bar(app).has_class("-right"))
+            assert bar(app).parent.id == "main" and len(bar(app).cards()) == 4 and bar(app).display
+            assert bar(app).selected.id == app.viewed.id == bar(app).members[2].id
+            assert app.settings.party_placement == "right"
+            await app.action_move_party()  # the palette entry, open to every role
+            assert bar(app).has_class("-top") and len(bar(app).cards()) == 4 and bar(app).selected.id == app.viewed.id
+            assert list(app.screen.children).index(bar(app)) < list(app.screen.children).index(app.query_one("#main"))
+    run(scenario)
+
+
+def test_a_player_can_move_the_bar_and_a_stand_in_party_may_be_large():
+    async def scenario():
+        app = make_app([])
+        async with app.run_test(size=(120, 36)) as pilot:
+            await until(pilot, lambda: bar(app).members)
+            await app.action_move_party()
+            assert bar(app).has_class("-right")
+        dev = make_app([], role=Role.DEV)
+        async with dev.run_test(size=(120, 36)) as pilot:
+            await act(pilot, "/party 30")
+            await until(pilot, lambda: len(bar(dev).cards()) == 30)
+    run(scenario)

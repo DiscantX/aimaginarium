@@ -15,7 +15,7 @@ from ...api import (
 )
 from ...llm import ConfigError
 from ..party import PartyMember, demo_party, party_from_view
-from .commands import DevCommands
+from .commands import DevCommands, PlayerCommands
 from .dev import preview_roll
 from .dock import dock_panes
 from .inputs import ActionInput, PasteConfirm
@@ -47,9 +47,10 @@ class GameApp(App):
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("f2", "toggle_dock", "Dev panels"),
-        Binding("f3", "focus_party", "Party"),
+        Binding("f3", "toggle_party", "Party bar"),
+        Binding("f4", "focus_party", "Select party member", show=False),
     ]
-    COMMANDS = App.COMMANDS | {DevCommands}
+    COMMANDS = App.COMMANDS | {DevCommands, PlayerCommands}
 
     def __init__(self, session: Session, opening: bool = True) -> None:
         super().__init__()
@@ -61,6 +62,8 @@ class GameApp(App):
         self.viewed: PartyMember | None = None
         """The party member being viewed (what a character panel shows); input still goes to the player's own."""
         self._demo_party_size: int | None = None
+        self._party_shown: bool | None = None
+        """The player's choice to show or hide the party bar; ``None`` leaves it to the party size."""
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         return dict(ROLE_DEFAULTS)
@@ -141,8 +144,30 @@ class GameApp(App):
         self.party = members
         bar = self.query_one(PartyBar)
         await bar.set_party(members)
-        bar.display = len(members) > 1 or self.settings.party_always_show
+        self._apply_party_visibility()
         self.viewed = bar.selected
+
+    def _apply_party_visibility(self) -> None:
+        """Shows the bar by the player's choice, or else when the party is more than the player alone."""
+        automatic = len(self.party) > 1 or self.settings.party_always_show
+        self.query_one(PartyBar).display = automatic if self._party_shown is None else self._party_shown
+
+    async def set_party_placement(self, placement: str) -> None:
+        """Moves the party bar to ``top`` or ``right``, keeping the party and the selection."""
+        if placement == self.settings.party_placement:
+            return
+        self.settings.party_placement = placement
+        selected = self.viewed.id if self.viewed else None
+        await self.query_one(PartyBar).remove()
+        bar = PartyBar(placement, id="party")
+        if placement == "top":
+            await self.mount(bar, before="#main")
+        else:
+            await self.query_one("#main").mount(bar)
+        await bar.set_party(self.party)
+        if selected:
+            bar.select(selected)
+        self._apply_party_visibility()
 
     @on(PartyBar.Selected)
     def _party_selected(self, event: PartyBar.Selected) -> None:
@@ -153,13 +178,28 @@ class GameApp(App):
     def _party_done(self) -> None:
         self.query_one(ActionInput).focus()
 
+    def action_toggle_party(self) -> None:
+        """Shows or hides the party bar (overriding the automatic choice). Showing it also focuses it."""
+        bar = self.query_one(PartyBar)
+        self._party_shown = not bar.display
+        self._apply_party_visibility()
+        if bar.display:
+            bar.focus()
+        else:
+            self.query_one(ActionInput).focus()
+
     def action_focus_party(self) -> None:
+        """Moves the keyboard to the party bar, if it is shown."""
         bar = self.query_one(PartyBar)
         if bar.display:
             bar.focus()
 
+    async def action_move_party(self) -> None:
+        """Moves the party bar to the other side."""
+        await self.set_party_placement("right" if self.settings.party_placement == "top" else "top")
+
     def set_demo_party(self, size: int | None) -> None:
-        """Dev: shows ``size`` stand-in members (1 to 8) on the party bar, or the real party for ``None``."""
+        """Dev: shows ``size`` stand-in members (any number of 1 or more) on the party bar, or the real party for ``None``."""
         if self.session.role is not Role.DEV:
             return
         self._demo_party_size = size
@@ -214,7 +254,7 @@ class GameApp(App):
         elif text.split()[:1] == ["/roll"] and self.session.role is Role.DEV:
             self.run_worker(preview_roll(self, self.story, text.split()[1:]))
         elif text.split()[:1] == ["/party"] and self.session.role is Role.DEV:
-            self._party_command(text.split()[1:])
+            await self._party_command(text.split()[1:])
         elif text == "/undo" and self.session.role is Role.DEV:
             await self.action_undo()
         elif text.split()[:1] == ["/log"] and self.session.role is Role.DEV:
@@ -241,14 +281,16 @@ class GameApp(App):
             if isinstance(envelope.event, CommandRejected):
                 self.notify(envelope.event.message, severity="warning")
 
-    def _party_command(self, args: list[str]) -> None:
-        """``/party [n|off]``: shows n (1 to 8, default 4) stand-in party members, or the real party with ``off``."""
+    async def _party_command(self, args: list[str]) -> None:
+        """``/party [n|off|top|right]``: n stand-in members (any number, default 4), the real party, or the placement."""
         if args[:1] == ["off"]:
             self.set_demo_party(None)
+        elif args[:1] in (["top"], ["right"]):
+            await self.set_party_placement(args[0])
         elif not args or args[0].isdigit():
-            self.set_demo_party(max(1, min(8, int(args[0]))) if args else 4)
+            self.set_demo_party(max(1, int(args[0])) if args else 4)
         else:
-            self.story.add("Usage: /party [1-8|off]", "system")
+            self.story.add("Usage: /party [number|off|top|right]", "system")
 
     def _log_test(self, args: list[str]) -> None:
         """``/log [debug|info|warning|error] message``: writes a test record, to check the Log tab."""
