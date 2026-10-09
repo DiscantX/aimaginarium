@@ -54,9 +54,9 @@ class StateInspector(DevPanel):
     async def _load(self, perspective: str) -> None:
         async for envelope in self.app.session.send(GetState(perspective)):
             if isinstance(envelope.event, StateView):
-                self.query_one("#view", Static).update(self._render(envelope.event))
+                self.query_one("#view", Static).update(self._content(envelope.event))
 
-    def _render(self, view: StateView):
+    def _content(self, view: StateView):
         if view.perspective == "player":
             self.raw = json.dumps(view.data, indent=2, ensure_ascii=False)
             return Syntax(self.raw, "json", word_wrap=True, background_color="default")

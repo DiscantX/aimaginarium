@@ -7,6 +7,7 @@ from rich.syntax import Syntax
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import DataTable, Static
+from textual_widgets import HorizontalSplitter
 
 from ....api import Envelope, TraceEvent
 from ....trace import summarize
@@ -19,8 +20,8 @@ class TraceTimeline(DevPanel):
 
     title = "Trace"
     DEFAULT_CSS = """
-    TraceTimeline DataTable { height: 2fr; }
-    TraceTimeline #detail { height: 3fr; border-top: solid $primary 50%; padding: 0 1; }
+    TraceTimeline #trace-rows { height: 2fr; }
+    TraceTimeline #detail { height: 1fr; padding: 0 1; }
     """
 
     def __init__(self, **kwargs) -> None:
@@ -29,7 +30,8 @@ class TraceTimeline(DevPanel):
         self._start: datetime | None = None
 
     def compose(self) -> ComposeResult:
-        yield DataTable(cursor_type="row", zebra_stripes=True)
+        yield DataTable(cursor_type="row", zebra_stripes=True, id="trace-rows")
+        yield HorizontalSplitter(target_id="trace-rows", min_size=4)
         with VerticalScroll(id="detail"):
             yield Static("", id="payload")
 

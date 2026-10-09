@@ -356,3 +356,42 @@ def test_the_palette_offers_dev_commands_only_to_the_dev_role():
         assert any(e.startswith("Undo last turn") for e in dev) and any(e.startswith("Preview a roll") for e in dev)
         assert not any("Undo" in e or "Preview a roll" in e for e in player)
     run(scenario)
+
+
+def test_every_dev_tab_draws_without_crashing():
+    """Hidden tabs are never drawn, so a bug in a panel's drawing only shows when its tab is opened."""
+    from textual.widgets import TabbedContent
+
+    async def scenario():
+        app = make_app([reply(["You creep."], check=stealth_check()), reply(["You slip past."], changes=CREATE)],
+                       die=14, role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            await act(pilot, "I sneak.")
+            await until(pilot, lambda: isinstance(app.screen, RollScreen))
+            await pilot.press("r")
+            await until(pilot, lambda: len(texts(app, "narration")) == 2 and not isinstance(app.screen, RollScreen))
+            dock = app.query_one(TabbedContent)
+            for pane in dock.query("TabPane"):
+                dock.active = pane.id
+                await pilot.pause(0.3)
+                app.export_screenshot()                                           # forces a full draw
+            assert dock.active == "tab-logpane"
+    run(scenario)
+
+
+def test_the_trace_table_and_detail_can_be_resized_by_dragging_the_splitter():
+    from textual_widgets import HorizontalSplitter
+
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            timeline = app.query_one(TraceTimeline)
+            table, splitter = timeline.query_one("#trace-rows"), timeline.query_one(HorizontalSplitter)
+            before = table.outer_size.height
+            x, y = splitter.region.x + 5, splitter.region.y
+            await pilot.mouse_down(None, offset=(x, y))
+            await pilot.hover(None, offset=(x, y + 4))
+            await pilot.mouse_up(None, offset=(x, y + 4))
+            await pilot.pause()
+            assert table.outer_size.height == before + 4
+    run(scenario)
