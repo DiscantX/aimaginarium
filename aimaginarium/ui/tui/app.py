@@ -10,16 +10,18 @@ from textual.widgets import Footer, Header, TabbedContent
 from textual_widgets import VerticalSplitter
 
 from ...api import (
-    CommandRejected, Envelope, GetPlayerView, OpenScene, Quit, Role, Session, StateView, SubmitAction, TurnRetracted,
-    Undo,
+    CommandRejected, Envelope, GetPlayerView, OpenScene, Quit, Role, Session, StateChanged, StateView, SubmitAction,
+    TurnRetracted, Undo,
 )
 from ...llm import ConfigError
+from ..party import PartyMember, demo_party, party_from_view
 from .commands import DevCommands
 from .dev import preview_roll
 from .dock import dock_panes
 from .inputs import ActionInput, PasteConfirm
 from .panels import DevPanel
 from .panels.log import LogPane, LogRecorded, TuiLogHandler
+from .party import PartyBar
 from .runner import TurnRunner
 from .settings import Settings
 from .story import StoryLog
@@ -42,7 +44,11 @@ class GameApp(App):
     #dev-dock { width: 1fr; }
     ActionInput { margin: 0 1; }
     """
-    BINDINGS = [Binding("ctrl+q", "quit", "Quit", priority=True), Binding("f2", "toggle_dock", "Dev panels")]
+    BINDINGS = [
+        Binding("ctrl+q", "quit", "Quit", priority=True),
+        Binding("f2", "toggle_dock", "Dev panels"),
+        Binding("f3", "focus_party", "Party"),
+    ]
     COMMANDS = App.COMMANDS | {DevCommands}
 
     def __init__(self, session: Session, opening: bool = True) -> None:
@@ -51,6 +57,10 @@ class GameApp(App):
         self.settings = Settings()
         self.runner: TurnRunner
         self.log_handler: TuiLogHandler | None = None
+        self.party: list[PartyMember] = []
+        self.viewed: PartyMember | None = None
+        """The party member being viewed (what a character panel shows); input still goes to the player's own."""
+        self._demo_party_size: int | None = None
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         return dict(ROLE_DEFAULTS)
@@ -58,6 +68,8 @@ class GameApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         dev = self.session.role is Role.DEV
+        if self.settings.party_placement == "top":
+            yield PartyBar("top", id="party")
         with Horizontal(id="main"):
             with Vertical(id="story-column", classes="with-dock" if dev else ""):
                 yield StoryLog(id="story")
@@ -67,6 +79,8 @@ class GameApp(App):
                 yield VerticalSplitter(target_id="story-column", min_size=40)
                 with TabbedContent(id="dev-dock"):
                     yield from dock_panes()
+            if self.settings.party_placement != "top":
+                yield PartyBar(self.settings.party_placement, id="party")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -75,9 +89,10 @@ class GameApp(App):
         self.runner = TurnRunner(self, self.session, self.story, self._set_busy)
         self.query_one(ActionInput).focus()
         if self.session.role is Role.DEV:
-            self.sub_title = "dev: /roll, /undo, /log, F2 panels"
+            self.sub_title = "dev: /roll, /undo, /log, /party, F2 panels"
             self._watch_logs()
         self.run_worker(self._follow(), group="follow")
+        await self._load_party()
         if self.opening:
             self._start(OpenScene())
         else:
@@ -106,8 +121,52 @@ class GameApp(App):
     def _dispatch(self, envelope: Envelope) -> None:
         if isinstance(envelope.event, TurnRetracted):
             self.story.retract(envelope.event.turn_id, remove=self.session.role is not Role.DEV)
+        if isinstance(envelope.event, StateChanged):
+            self.run_worker(self._load_party(), group="party", exclusive=True)
         for panel in self.query(DevPanel):
             panel.on_envelope(envelope)
+
+    async def _load_party(self) -> None:
+        """Asks for the player view and shows the party it describes (a stand-in party in dev, if one was asked for)."""
+        members: list[PartyMember] = []
+        async for envelope in self.session.send(GetPlayerView()):
+            if isinstance(envelope.event, StateView):
+                members = party_from_view(envelope.event.data)
+        if self._demo_party_size is not None and members:
+            members = demo_party(members[0], self._demo_party_size)
+        await self._show_party(members)
+
+    async def _show_party(self, members: list[PartyMember]) -> None:
+        """Puts the party on the bar, hiding the bar for a party of one unless the setting says to show it."""
+        self.party = members
+        bar = self.query_one(PartyBar)
+        await bar.set_party(members)
+        bar.display = len(members) > 1 or self.settings.party_always_show
+        self.viewed = bar.selected
+
+    @on(PartyBar.Selected)
+    def _party_selected(self, event: PartyBar.Selected) -> None:
+        """The viewed character changed. Only a view: the story and the input stay with the player's own character."""
+        self.viewed = event.member
+
+    @on(PartyBar.Done)
+    def _party_done(self) -> None:
+        self.query_one(ActionInput).focus()
+
+    def action_focus_party(self) -> None:
+        bar = self.query_one(PartyBar)
+        if bar.display:
+            bar.focus()
+
+    def set_demo_party(self, size: int | None) -> None:
+        """Dev: shows ``size`` stand-in members (1 to 8) on the party bar, or the real party for ``None``."""
+        if self.session.role is not Role.DEV:
+            return
+        self._demo_party_size = size
+        self.run_worker(self._load_party(), group="party", exclusive=True)
+
+    def action_toggle_demo_party(self) -> None:
+        self.set_demo_party(None if self._demo_party_size else 4)
 
     @on(LogRecorded)
     def _log_recorded(self, event: LogRecorded) -> None:
@@ -154,6 +213,8 @@ class GameApp(App):
             await self.action_quit()
         elif text.split()[:1] == ["/roll"] and self.session.role is Role.DEV:
             self.run_worker(preview_roll(self, self.story, text.split()[1:]))
+        elif text.split()[:1] == ["/party"] and self.session.role is Role.DEV:
+            self._party_command(text.split()[1:])
         elif text == "/undo" and self.session.role is Role.DEV:
             await self.action_undo()
         elif text.split()[:1] == ["/log"] and self.session.role is Role.DEV:
@@ -179,6 +240,15 @@ class GameApp(App):
         async for envelope in self.session.send(Undo()):
             if isinstance(envelope.event, CommandRejected):
                 self.notify(envelope.event.message, severity="warning")
+
+    def _party_command(self, args: list[str]) -> None:
+        """``/party [n|off]``: shows n (1 to 8, default 4) stand-in party members, or the real party with ``off``."""
+        if args[:1] == ["off"]:
+            self.set_demo_party(None)
+        elif not args or args[0].isdigit():
+            self.set_demo_party(max(1, min(8, int(args[0]))) if args else 4)
+        else:
+            self.story.add("Usage: /party [1-8|off]", "system")
 
     def _log_test(self, args: list[str]) -> None:
         """``/log [debug|info|warning|error] message``: writes a test record, to check the Log tab."""

@@ -6,7 +6,7 @@ from ...api import Role
 
 
 class DevCommands(Provider):
-    """Out-of-character dev commands: undo the last turn, preview a roll, show or hide the dev dock."""
+    """Out-of-character dev commands: undo the last turn, preview a roll, show or hide the dev dock or a stand-in party."""
 
     def _entries(self):
         app = self.app
@@ -16,6 +16,7 @@ class DevCommands(Provider):
             ("Undo last turn", "Take back the latest turn", app.action_undo),
             ("Preview a roll", "Open the roll window on a made-up check", app.action_preview_roll),
             ("Toggle dev panels", "Show or hide the dock", app.action_toggle_dock),
+            ("Toggle stand-in party", "Show a made-up party of four on the party bar", app.action_toggle_demo_party),
         ]
 
     async def discover(self) -> Hits:

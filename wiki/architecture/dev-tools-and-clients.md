@@ -129,3 +129,26 @@ This replaces the dev-tools item previously in [../open-questions.md](../open-qu
 ## As built: the TUI dev dock (#69)
 
 **[Decided]** The dev role mounts a tabbed dock beside the story (resizable with a splitter, `F2` hides it): **Trace** (a row per record, the selected row's full payload underneath), **State** (GM text or player projection, refreshed on `StateChanged`), **Diffs** and **Checks** (expandable trees built from `state.diff` and `check.workings`), and **Log** (Python log records, filter by level and logger-name substring). Panels register with `@dev_panel`, receive every envelope the session streams, and only the dev role mounts them, so a player session has no panel that could show hidden state. A retracted turn fades out in the dev role and is removed for any other role. Dev palette entries (Undo, Preview a roll, Toggle dev panels) and the slash commands `/undo` and `/roll` exist for the dev role only.
+
+## As built: the party bar (#78)
+
+A player-facing panel (it is not a dev panel and every role gets it). The data model is `aimaginarium/ui/party.py` (shared by every client: `PartyMember`, `Controller`, `party_from_view`, `demo_party`); the Textual widgets are `aimaginarium/ui/tui/party.py` (`PartyCard`, `PartyBar`).
+
+**[Decided]** The party bar is modelled on the party panel of Baldur's Gate 1 and 2 (a card per member, click to select), as bordered cards: name (border title), class and level, HP bar and status markers. A collapse to a single row comes later; terminal portraits are deferred (a terminal image library may be adopted down the road, and the web UI can use real portraits).
+
+**[Decided]** Placement is a config choice (`Settings.party_placement`: `top`, a scrolling row under the header, or `right`, a scrolling column at the right edge); the widget is dock-agnostic and top is the default. The bar is hidden while the party is only the player's own character and appears when a second member exists (`Settings.party_always_show` forces it on).
+
+**[Decided]** Selecting a card changes the *viewed* character, which is what the left character panel will show. It never changes whose point of view the story has or whom the input is addressed to: that stays the player's own character. A later decision that one player may control several characters would turn "mine" into a set; it has not been discussed. The bar marks two things apart: **mine** (a star in the card title) and **selected** (a heavy highlighted border). They coincide by default.
+
+**[Decided]** Each member carries a `controller` (`human`, `llm-mcp`, `llm-internal`), shown as a small tag (`AI`, `AI·MCP`) on the card. A member played by the LLM-as-player MCP, or by our own API key driving the other 1 to 7 members, is an ordinary player slot to the bar.
+
+**[Proposed]** Keys: `F3` focuses the bar; the arrows along its axis move the selection; `Enter` keeps it and returns to the input; `Esc` or `Home` selects the player's own character and returns to the input. Selection is a view change and sends no command.
+
+**[Proposed]** Until the engine has a party model, `party_from_view` builds the party from the player view (the player alone, with `class`, `level`, `hp`, `max_hp` and `statuses` filling the card when the character has them; a view that carries a `party` list uses that). A card shows `HP ?` and a dash for what the viewer may not know. The dev role can show 1 to 8 stand-in members with `/party [n|off]` or the palette entry, to judge the layout.
+
+**[Open]**
+- What the viewer may see of members other than their own character (a projection question for the API, not the renderer).
+- What counts as a party member (summons? tagalong NPCs?).
+- The left character panel (#68), which will follow `GameApp.viewed`.
+- Collapse to a single row; whether the Notes panel is per character, with the controller deciding who writes.
+- The engine's party model and the cost of many AI-controlled members (see the single-writer note in [multiplayer](multiplayer-and-api.md)).
