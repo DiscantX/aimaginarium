@@ -47,15 +47,20 @@ class TurnRunner:
         landed = False
         self.busy(True)
 
+        turn: Optional[int] = None
+
         def note(text: str) -> None:
-            self.story.add(text, "system")
+            self.story.add(text, "system", turn)
 
         try:
             async for envelope in self.session.send(command):
                 event = envelope.event
+                if envelope.turn_id is not None:
+                    turn = envelope.turn_id
+                    self.story.tag_turn(turn)
                 if isinstance(event, Narration):
                     self.busy(False)
-                    entry = entry or self.story.add("", "narration")
+                    entry = entry or self.story.add("", "narration", turn)
                     entry.append(event.text)
                     self.story.call_after_refresh(self.story.scroll_end, animate=False)
                     continue
@@ -63,7 +68,7 @@ class TurnRunner:
                 if isinstance(event, CheckCalled):
                     check = event
                 elif isinstance(event, RollResult):
-                    self.story.add(roll_line(event), "roll")
+                    self.story.add(roll_line(event), "roll", turn)
                     if screen is not None:
                         screen.land(event)
                         landed = True
