@@ -124,3 +124,8 @@ This replaces the dev-tools item previously in [../open-questions.md](../open-qu
 - **[Open]** Whether players ever get undo, and in what form.
 - **[Open]** Pure template as an MCP prompt or a tool.
 - **[Open]** Exact set of dev panels and tools for the first Textual release; start from the lists above and trim.
+
+
+## As built: the TUI dev dock (#69)
+
+**[Decided]** The dev role mounts a tabbed dock beside the story (resizable with a splitter, `F2` hides it): **Trace** (a row per record, the selected row's full payload underneath), **State** (GM text or player projection, refreshed on `StateChanged`), **Diffs** and **Checks** (expandable trees built from `state.diff` and `check.workings`), and **Log** (Python log records, filter by level and logger-name substring). Panels register with `@dev_panel`, receive every envelope the session streams, and only the dev role mounts them, so a player session has no panel that could show hidden state. A retracted turn fades out in the dev role and is removed for any other role. Dev palette entries (Undo, Preview a roll, Toggle dev panels) and the slash commands `/undo` and `/roll` exist for the dev role only.

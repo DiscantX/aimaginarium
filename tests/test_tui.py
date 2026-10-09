@@ -16,7 +16,16 @@ from aimaginarium.ui.tui.roll import RollScreen  # noqa: E402
 from aimaginarium.ui.tui.runner import roll_line  # noqa: E402
 from aimaginarium.ui.tui.thinking import Thinking  # noqa: E402
 from aimaginarium.world import WorldStore  # noqa: E402
-from engine_helpers import make_game, reply, stealth_check  # noqa: E402
+from engine_helpers import PLAYER_ID, make_game, reply, stealth_check  # noqa: E402
+from aimaginarium.ui.tui.panels import DevPanel  # noqa: E402
+from aimaginarium.ui.tui.panels.events import ChecksPanel, DiffPanel  # noqa: E402
+from aimaginarium.ui.tui.panels.log import LogPane  # noqa: E402
+from aimaginarium.ui.tui.panels.state import StateInspector  # noqa: E402
+from aimaginarium.ui.tui.panels.trace import TraceTimeline  # noqa: E402
+from textual.widgets import DataTable, RadioButton, Tree  # noqa: E402
+
+
+CREATE = [{"op": "create", "ref": "@coin", "kind": "item", "name": "Silver coin", "parent_id": PLAYER_ID}]
 
 
 @pytest.fixture(autouse=True)
@@ -228,3 +237,122 @@ def test_the_die_slows_into_the_final_faces():
     gaps = [b - a for a, b in zip(times, times[1:])]
     assert gaps[0] < 0.08 and gaps[-1] > 0.4
     assert gaps[-1] > 2 * gaps[-2] and all(b >= a for a, b in zip(gaps, gaps[1:]))
+
+
+def test_the_dev_dock_exists_only_for_the_dev_role():
+    async def scenario():
+        player = make_app([])
+        async with player.run_test():
+            assert not player.query(DevPanel) and not player.query("#dev-dock")
+        dev = make_app([], role=Role.DEV)
+        async with dev.run_test():
+            assert {type(p) for p in dev.query(DevPanel)} == {TraceTimeline, StateInspector, DiffPanel, ChecksPanel,
+                                                              LogPane}
+    run(scenario)
+
+
+def test_a_turn_fills_the_trace_the_diffs_and_the_checks():
+    async def scenario():
+        app = make_app([reply(["You creep."], check=stealth_check()), reply(["You slip past."], changes=CREATE)],
+                       die=14, role=Role.DEV)
+        async with app.run_test() as pilot:
+            await act(pilot, "I sneak.")
+            await until(pilot, lambda: isinstance(app.screen, RollScreen))
+            await pilot.press("r")
+            await until(pilot, lambda: len(texts(app, "narration")) == 2 and not isinstance(app.screen, RollScreen))
+            await until(pilot, lambda: len(app.query_one(DiffPanel).query_one(Tree).root.children) == 1)
+            kinds = [e.kind for e in app.query_one(TraceTimeline).records.values()]
+            assert {"llm.call", "check.workings", "changes.accepted", "state.diff"} <= set(kinds)
+            assert app.query_one(TraceTimeline).query_one(DataTable).row_count == len(kinds)
+            check = app.query_one(ChecksPanel).query_one(Tree).root.children[0]
+            assert "stealth" in str(check.label) and "difficulty 12" in str(check.label)
+            assert any("creaking floor" in str(leaf.label) for leaf in check.children)
+            assert "create" in str(app.query_one(DiffPanel).query_one(Tree).root.children[0].label)
+    run(scenario)
+
+
+def test_the_state_inspector_shows_the_gm_view_and_the_players_projection():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test() as pilot:
+            inspector = app.query_one(StateInspector)
+            await until(pilot, lambda: "[char-2]" in inspector.raw)                 # the GM sees entity ids
+            inspector.query_one("#player", RadioButton).value = True
+            await until(pilot, lambda: "[char-2]" not in inspector.raw and "location" in inspector.raw.lower())
+    run(scenario)
+
+
+def test_undo_greys_the_turn_out_for_the_dev_role_and_removes_it_otherwise():
+    async def scenario():
+        app = make_app([reply(["Marta smiles."])], role=Role.DEV)
+        async with app.run_test() as pilot:
+            await act(pilot, "I greet Marta.")
+            await until(pilot, lambda: texts(app, "narration") and not app.query_one(ActionInput).disabled)
+            assert all(e.turn_id == 1 for e in app.story.entries() if e.kind in ("player", "narration"))
+            await act(pilot, "/undo")
+            await until(pilot, lambda: all(e.has_class("retracted") for e in app.story.entries()))
+            assert len(app.story.entries()) == 2                                  # still shown, greyed out
+        player = make_app([reply(["Marta smiles."])])
+        async with player.run_test() as pilot:
+            await act(pilot, "I greet Marta.")
+            await until(pilot, lambda: texts(player, "narration") and not player.query_one(ActionInput).disabled)
+            player.story.retract(1, remove=True)
+            await until(pilot, lambda: not player.story.entries())
+    run(scenario)
+
+
+def test_undo_with_nothing_to_take_back_says_so():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test() as pilot:
+            await act(pilot, "/undo")
+            await pilot.pause(0.2)
+            assert app._notifications and "no turn" in app._notifications.__iter__().__next__().message.lower()
+    run(scenario)
+
+
+def test_the_log_pane_filters_by_level_and_component():
+    import logging
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test() as pilot:
+            pane = app.query_one(LogPane)
+            logging.getLogger("aimaginarium.llm.retry").debug("quiet detail")
+            logging.getLogger("aimaginarium.llm.retry").warning("slow reply")
+            logging.getLogger("aimaginarium.engine").error("bad change")
+            await until(pilot, lambda: len(pane.shown) == 2)                       # debug is below the Info default
+            assert "slow reply" in pane.shown[0] and "bad change" in pane.shown[1]
+            pane.query_one("#component").value = "engine"
+            await until(pilot, lambda: len(pane.shown) == 1)
+            assert "bad change" in pane.shown[0]
+    run(scenario)
+
+
+def test_the_state_inspector_follows_an_undo():
+    async def scenario():
+        app = make_app([reply(["You find a coin."], changes=CREATE)], role=Role.DEV)
+        async with app.run_test() as pilot:
+            inspector = app.query_one(StateInspector)
+            await act(pilot, "I look.")
+            await until(pilot, lambda: "Silver coin" in inspector.raw)
+            await act(pilot, "/undo")
+            await until(pilot, lambda: "Silver coin" not in inspector.raw and "[char-2]" in inspector.raw)
+    run(scenario)
+
+
+def test_the_palette_offers_dev_commands_only_to_the_dev_role():
+    from textual.widgets import OptionList
+
+    async def entries(role):
+        app = make_app([], role=role)
+        async with app.run_test() as pilot:
+            await pilot.press("ctrl+p")
+            await pilot.pause(0.4)
+            options = app.screen.query(OptionList).first()
+            return [str(options.get_option_at_index(i).prompt) for i in range(options.option_count)]
+
+    async def scenario():
+        dev, player = await entries(Role.DEV), await entries(Role.PLAYER)
+        assert any(e.startswith("Undo last turn") for e in dev) and any(e.startswith("Preview a roll") for e in dev)
+        assert not any("Undo" in e or "Preview a roll" in e for e in player)
+    run(scenario)

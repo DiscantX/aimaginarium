@@ -134,7 +134,7 @@ class JsonlSink:
         self._file.close()
 
 
-def _summary(kind: str, p: dict[str, Any]) -> str:
+def summarize(kind: str, p: dict[str, Any]) -> str:
     """One line describing a record."""
     if kind == "llm.call":
         u = p.get("usage", {})
@@ -188,7 +188,7 @@ def format_timeline(records: Iterable[Any], full: bool = False) -> str:
     lines = []
     for r in records:
         offset = (datetime.fromisoformat(r.at) - start).total_seconds()
-        lines.append(f"+{offset:7.3f}s  {r.kind:<17} {_summary(r.kind, r.payload)}")
+        lines.append(f"+{offset:7.3f}s  {r.kind:<17} {summarize(r.kind, r.payload)}")
         if full:
             body = json.dumps(r.payload, indent=2, default=str, ensure_ascii=False)
             lines.append("\n".join("            " + ln for ln in body.splitlines()))
