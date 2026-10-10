@@ -167,17 +167,28 @@ class ProviderFactory:
     def _candidate(self, name: str, model: Optional[str]) -> Candidate:
         """Builds a candidate, using the provider's default model if none is given."""
         provider = self._provider(name)
-        return Candidate(name, provider, model or self._config["providers"][name]["model"])
+        default_model = self._config.get("providers", {}).get(name, {}).get("model")
+        if not default_model:
+            default_model = getattr(provider, "default_model", "glm-4.7-flash")
+        return Candidate(name, provider, model or default_model)
 
     def _provider(self, name: str) -> LLMProvider:
         """Returns the provider with this name, building it the first time."""
         if name not in self._providers:
             spec = self._config.get("providers", {}).get(name)
             if spec is None:
-                raise ConfigError(f"provider {name!r} is not defined")
-            builder = self._builders.get(spec.get("kind"))
+                if name in self._builders:
+                    spec = {"kind": name}
+                else:
+                    raise ConfigError(f"provider {name!r} is not defined")
+            kind = spec.get("kind")
+            builder = self._builders.get(kind) if kind else None
             if builder is None:
-                raise ConfigError(f"provider {name!r} has unknown kind {spec.get('kind')!r}")
-            policy = RetryPolicy(**{**self._config.get("retry", {}), **spec.get("retry", {})})
+                raise ConfigError(f"provider {name!r} has unknown kind {kind!r}")
+            top_raw = self._config.get("retry")
+            top_retry = dict(top_raw) if isinstance(top_raw, dict) else {}
+            spec_raw = spec.get("retry")
+            spec_retry = dict(spec_raw) if isinstance(spec_raw, dict) else {}
+            policy = RetryPolicy(**{**top_retry, **spec_retry})
             self._providers[name] = RetryingProvider(builder(spec, self._env), policy, self._on_retry)
         return self._providers[name]
