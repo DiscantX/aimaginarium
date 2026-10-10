@@ -72,6 +72,22 @@ def _build_gemini(spec: Mapping[str, Any], env: Mapping[str, str]) -> LLMProvide
     )
 
 
+def _build_zai(spec: Mapping[str, Any], env: Mapping[str, str]) -> LLMProvider:
+    from .providers.zai import ZAIProvider
+
+    variable = spec.get("api_key_env", "ZAI_API_KEY")
+    if not env.get(variable) and not env.get("OPENAI_API_KEY"):
+        raise ConfigError(f"Z.AI needs an API key: set {variable} or OPENAI_API_KEY in .env or the environment")
+    api_key = env.get(variable) or env.get("OPENAI_API_KEY")
+    return ZAIProvider(
+        default_model=spec.get("model", "glm-4.7-flash"),
+        base_url=spec.get("base_url", "https://api.z.ai/api/paas/v4/"),
+        api_key=api_key,
+        config=spec.get("config"),
+        capabilities=_capabilities(spec),
+    )
+
+
 class ProviderFactory:
     """Creates providers on first use and routes each task to a provider and model."""
 
@@ -101,7 +117,12 @@ class ProviderFactory:
         """
         self._config = config
         self._env = os.environ if env is None else env
-        self._builders: dict[str, Builder] = {"ollama": _build_ollama, "gemini": _build_gemini, **(builders or {})}
+        self._builders: dict[str, Builder] = {
+            "ollama": _build_ollama,
+            "gemini": _build_gemini,
+            "zai": _build_zai,
+            **(builders or {}),
+        }
         self._on_retry = on_retry
         self._on_fallback = on_fallback
         self._cooldown = Cooldown(self._config.get("fallback", {}).get("cooldown", 60.0), clock)

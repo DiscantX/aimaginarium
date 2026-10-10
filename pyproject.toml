@@ -19,6 +19,7 @@ aimaginarium = "aimaginarium.ui.launch:main"
 
 [project.optional-dependencies]
 gemini = ["google-genai>=1.0"]
+zai = ["openai>=1.0"]
 tui = ["textual>=8.2", "textual-widgets>=0.32"]
 dev = [
     "pytest>=8",

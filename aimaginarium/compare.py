@@ -77,6 +77,7 @@ def build_request(builder: PromptBuilder, store: WorldStore, scenario: str, vari
     Returns:
         The request, ready to send.
     """
+    print("Build request...")
     state = render_state(store, PLAYER_ID)
     if scenario == "opening":
         return builder.build("opening", state=state, variant=variant).request(schema=TurnReply)
@@ -96,6 +97,7 @@ def build_request(builder: PromptBuilder, store: WorldStore, scenario: str, vari
 
 async def run_one(candidate: Candidate, request, scenario: str, run: int) -> Result:
     """Sends one request to one candidate and scores the reply."""
+    print("Run one...")
     label = candidate.label
     started = time.monotonic()
     final: Optional[Response] = None
@@ -139,6 +141,7 @@ async def compare(
     Returns:
         One result per call, in order.
     """
+    print("Compare...")
     builder = builder or PromptBuilder.from_directory()
     candidates = [factory.candidate(spec) for spec in specs]
     results = []
