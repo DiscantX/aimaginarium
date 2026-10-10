@@ -182,6 +182,22 @@ class PartyBar(ScrollableContainer, can_focus=True):
         self.scroll_to_widget(card, animate=False)
         self.post_message(self.Selected(card.member))
 
+    WHEEL_STEP = 6
+    """Cells a wheel notch scrolls the row, since the wheel is vertical and the top bar scrolls sideways."""
+
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        self._wheel(event, 1)
+
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        self._wheel(event, -1)
+
+    def _wheel(self, event: events.MouseEvent, direction: int) -> None:
+        """Turns the vertical wheel into sideways scrolling for the top bar; the column scrolls on its own."""
+        if self.orientation == "top":
+            event.stop()
+            event.prevent_default()
+            self.scroll_relative(x=direction * self.WHEEL_STEP, animate=False)
+
     def on_party_card_clicked(self, event: PartyCard.Clicked) -> None:
         event.stop()
         self.select(event.member_id)

@@ -160,3 +160,32 @@ def test_a_player_can_move_the_bar_and_a_stand_in_party_may_be_large():
             await act(pilot, "/party 30")
             await until(pilot, lambda: len(bar(dev).cards()) == 30)
     run(scenario)
+
+
+def wheel(widget, kind, shift=False):
+    """Posts a mouse wheel event over a widget."""
+    from textual import events
+    widget.post_message(kind(widget, 2, 2, 0, 1, 0, shift, False, False))
+
+
+def test_the_wheel_scrolls_the_top_bar_sideways_and_the_column_vertically():
+    from textual import events
+
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(80, 36)) as pilot:
+            app.set_demo_party(12)
+            await until(pilot, lambda: len(bar(app).cards()) == 12)
+            assert bar(app).scroll_x == 0
+            wheel(bar(app), events.MouseScrollDown)
+            await until(pilot, lambda: bar(app).scroll_x > 0)
+            moved = bar(app).scroll_x
+            wheel(bar(app), events.MouseScrollUp)
+            await until(pilot, lambda: bar(app).scroll_x < moved)
+            wheel(bar(app).cards()[1], events.MouseScrollDown)  # over a card: it bubbles to the bar
+            await until(pilot, lambda: bar(app).scroll_x > 0)
+            await app.set_party_placement("right")
+            await pilot.pause(0.2)
+            wheel(bar(app), events.MouseScrollDown)
+            await until(pilot, lambda: bar(app).scroll_y > 0)
+    run(scenario)
