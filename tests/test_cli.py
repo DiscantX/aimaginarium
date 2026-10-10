@@ -11,7 +11,7 @@ from aimaginarium.prompts import PromptBuilder
 from aimaginarium.world import WorldStore
 
 
-def run_session(game, inputs, opening=False, role=Role.PLAYER):
+def run_session(game, inputs, opening=False, role=Role.PLAYER, devstore=None):
     asked, output = [], []
     lines = iter(inputs)
 
@@ -25,7 +25,7 @@ def run_session(game, inputs, opening=False, role=Role.PLAYER):
     def out(text="", end="\n"):
         output.append(re.sub(r"\033\[[0-9;]*m", "", text) + end)
 
-    session = LocalServer(game, dev_enabled=True).connect(role)
+    session = LocalServer(game, dev_enabled=True, devstore=devstore).connect(role)
     asyncio.run(play(session, ask, out, opening=opening))
     return asked, "".join(output)
 
@@ -161,3 +161,26 @@ def test_ctrl_c_at_the_roll_prompt_leaves_cleanly():
     session = LocalServer(fresh_game([reply(["You creep."], check=stealth_check())])).connect()
     asyncio.run(play(session, ask, lambda text="", end="\n": None, opening=False))
     assert session._closed
+
+
+def test_dn_adds_a_dev_note_in_the_plain_client_and_a_player_has_no_such_command():
+    from aimaginarium.devstore import DevStore
+
+    def game():
+        store = WorldStore.open()
+        create_demo_world(store)
+        return make_game(store, [reply(["Marta nods."])])[0], store
+
+    g, store = game()
+    with DevStore.open() as dev:
+        _, output = run_session(g, ["/dn too early", "I greet Marta.", "/dn #tone Marta is too curt", "/dev-note 1 and again",
+                                    "/dn", "/dn 9 nope"], role=Role.DEV, devstore=dev)
+        assert "no turn yet" in output and "Dev note 1 added to turn 1." in output and "Dev note 2 added to turn 1." in output
+        assert "Usage: /dn" in output and "There is no turn 9." in output
+        notes = dev.notes(store.world_id)
+        assert [(n.text, n.tags, n.turn_id) for n in notes] == [("Marta is too curt", ("tone",), 1), ("and again", (), 1)]
+
+    g, store = game()
+    with DevStore.open() as dev:
+        _, output = run_session(g, ["/dn hello"], role=Role.PLAYER, devstore=dev)
+        assert "Unknown command /dn" in output and dev.notes(store.world_id) == []

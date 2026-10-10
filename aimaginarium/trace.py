@@ -43,6 +43,13 @@ class TraceRecord:
 Sink = Callable[[TraceRecord], None]
 
 
+def turn_in_range(record_turn: Optional[int], turn: Optional[int], around: int = 0) -> bool:
+    """Whether a record's turn is ``turn`` (or within ``around`` turns of it); any record matches when no turn is given."""
+    if turn is None:
+        return True
+    return record_turn is not None and turn - around <= record_turn <= turn + around
+
+
 class Tracer:
     """Collects trace records and hands them to sinks.
 
@@ -89,15 +96,16 @@ class Tracer:
                 self._sinks.remove(sink)
         return record
 
-    def records(self, since: int = 0, limit: int = 200, turn: Optional[int] = None) -> list[TraceRecord]:
+    def records(self, since: int = 0, limit: int = 200, turn: Optional[int] = None, around: int = 0) -> list[TraceRecord]:
         """Returns kept records after ``since``, oldest first.
 
         Args:
             since: Return only records with a greater sequence number.
             limit: Most records to return.
             turn: If given, only records of that turn.
+            around: With ``turn``, also the records of this many turns before and after it.
         """
-        found = [r for r in self._buffer if r.seq > since and (turn is None or r.turn_id == turn)]
+        found = [r for r in self._buffer if r.seq > since and turn_in_range(r.turn_id, turn, around)]
         return found[:limit]
 
     def close(self) -> None:

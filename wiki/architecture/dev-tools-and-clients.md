@@ -175,3 +175,23 @@ A player-facing panel (every role gets it) in a left column, following the party
 - Whether the panel's sections are collapsed or open by default per player, and remembering the choice.
 - Where hit points and levels will be enforced, and how spells, features and other rules data enter the sheet.
 - Notes: whether the Notes panel is per character.
+
+
+## Dev notes and the dev store (#94)
+
+A **dev note** is the developer's remark about the game (a continuity slip, a rule gone wrong, a tone problem), kept outside the game and read later by the developer and by Claude to see which kinds of problem recur. It is **not** a player note: player notes are the player's own in-game notes on the story and belong to the game, so the two must never share a name, a command or a store.
+
+**[Decided]** Dev notes attach to a turn and are written in the dev role. They never reach an LLM prompt or the authoritative world state, so they live in a store of their own, never in a world's database. The command is `/dn` (alias `/dev-note`), never `/note`.
+
+**[Decided]** The full trace (prompts and replies included) is kept for the dev role in that same store, so "the trace of this turn and the turns around it" can be read after a restart. The in-memory buffer (the latest 2000 records, `Tracer`) stays as what a late-connecting client backfills from; it has no bearing on rebuilding world state, which comes from the world's event log.
+
+**As built (first slice).**
+- `aimaginarium/devstore.py`, `DevStore`: one SQLite file per developer (default `dev.sqlite` beside the world file, `--dev-store PATH`), opened only with `--dev`. Rows are keyed by world id and turn id. The trace table keeps every record with the run it came from (sequence numbers restart each run); strings of 400 characters or more (the system prompt, the history) are stored once, by hash, so repeated prompts cost almost nothing. `dev_notes` holds the text, tags, an optional anchor (such as a trace sequence number), an excerpt, a status (`open` or `resolved`), a resolution (such as the issue that fixed it), the author (`developer` or `claude`) and times.
+- `WorldStore.world_id`: a stable identity kept in a small `meta` table made on demand (so older worlds get one), independent of the file's path. A copied world file carries its id; call `new_world_id()` on a copy meant to be a world of its own. Whether a world is a file at all is #98.
+- API: `AddDevNote` (the latest turn by default; the server quotes the turn if no excerpt is given), `GetDevNotes` (by turn, tag or status), events `DevNoteAdded` and `DevNoteList`, all dev-only; `GetTrace` gained `around` (a turn and the turns around it), read from the dev store when there is one.
+- Clients: `/dn [turn] [#tag ...] text` in the Textual and plain clients; the parsing is shared (`aimaginarium/ui/devnote.py`). Turns that were taken back can still be noted (turn ids are never reused and nothing is deleted).
+
+**[Proposed]** Next: a **Dev notes** tab in the dock (list, filter by tag or status, jump to a turn's trace, edit, resolve by linking an issue, delete); then a dialog for longer notes and a right-click context menu (story entries and trace rows) with a keyboard route as well, since terminals differ on right-click; the dialog shows the note, tags, anchor and a short summary of the turn, with a button to open its trace rather than embedding prompts. A selection can be quoted as the excerpt. A single definition of each command (slash, palette and a typing popup generated from it) is a separate change. Export for Claude to read, then an MCP tool (#67).
+
+**[Open]** Whether the context menu is dev-only (a menu for players must stay out-of-character, such as copy, and must never list things the character could do: tenet 6). Notes on entities and locations, not only turns. Whether production keeps the full trace.
+

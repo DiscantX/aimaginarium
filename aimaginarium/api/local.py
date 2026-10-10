@@ -11,11 +11,12 @@ import asyncio
 from typing import Any, AsyncIterator, Optional
 
 from .. import engine as eng
+from ..devstore import DevStore
 from ..engine import Game, render_player_view, render_state
 from ..trace import TraceRecord
-from .commands import Command, GetPlayerView, GetState, GetTrace, OpenScene, Quit, Roll, SubmitAction, Undo
+from .commands import AddDevNote, Command, GetDevNotes, GetPlayerView, GetState, GetTrace, OpenScene, Quit, Roll, SubmitAction, Undo
 from .events import (
-    ApiEvent, ChangesRejected, CheckCalled, CommandRejected, Done, Envelope, Narration, Repairing, ReplyUnreadable,
+    ApiEvent, ChangesRejected, CheckCalled, CommandRejected, DevNoteAdded, DevNoteList, Done, Envelope, Narration, Repairing, ReplyUnreadable,
     RollResult, StateChanged, StateView, TraceEvent, TurnRetracted,
 )
 from .roles import Role, RoleError
@@ -29,15 +30,19 @@ def player_view(game: Game) -> dict[str, Any]:
 class LocalServer:
     """Serves one game to any number of in-process sessions."""
 
-    def __init__(self, game: Game, dev_enabled: bool = False):
+    def __init__(self, game: Game, dev_enabled: bool = False, devstore: Optional[DevStore] = None):
         """Initialises the server.
 
         Args:
             game: The game to serve.
             dev_enabled: Whether the dev role may connect (config decides).
+            devstore: Where dev notes live and where the trace is kept in full (the caller adds the store's
+                trace sink to the game's tracer). Without it dev notes are unavailable and ``GetTrace`` reads
+                only the tracer's in-memory buffer.
         """
         self.game = game
         self.dev_enabled = dev_enabled
+        self.devstore = devstore
         self._log: list[Envelope] = []
         self._lock = asyncio.Lock()
         self._waiters: list[asyncio.Future] = []
@@ -118,11 +123,51 @@ class LocalServer:
         if isinstance(command, Undo):
             return self._undo()
         if isinstance(command, GetTrace):
-            records = game.tracer.records(command.since, command.limit, command.turn)
-            return self._single(*(self._trace_event(r) for r in records))
+            return self._single(*(self._trace_event(r) for r in self._trace(command)))
+        if isinstance(command, AddDevNote):
+            return self._add_dev_note(command)
+        if isinstance(command, GetDevNotes):
+            if self.devstore is None:
+                return self._rejected("not_available", "There is no dev store.")
+            notes = self.devstore.notes(game.store.world_id, command.turn, command.tag, command.status, command.limit)
+            return self._single(DevNoteList(tuple(n.to_dict() for n in notes)))
         if isinstance(command, Quit):
             return self._single()
         return self._rejected("not_available", f"{command.name} is not available.")
+
+    def _trace(self, command: GetTrace) -> list[TraceRecord]:
+        """The trace asked for. A turn comes from the dev store when there is one, so it can be read after the
+        program was restarted; anything else (what happened since a sequence number) is this run's buffer, and
+        ``since`` only applies to that."""
+        if self.devstore is not None and command.turn is not None:
+            records = self.devstore.trace(self.game.store.world_id, command.turn, command.around, command.limit)
+            return records
+        return self.game.tracer.records(command.since, command.limit, command.turn, command.around)
+
+    def _add_dev_note(self, command: AddDevNote) -> AsyncIterator[ApiEvent]:
+        if self.devstore is None:
+            return self._rejected("not_available", "There is no dev store.")
+        game = self.game
+        turn = game.turn_id if command.turn is None else command.turn
+        if turn is None:
+            return self._rejected("no_turn", "There is no turn yet to attach the note to.")
+        known = {e.turn_id for e in game.store.events(include_retracted=True) if e.turn_id is not None}
+        if turn not in known:
+            return self._rejected("unknown_turn", f"There is no turn {turn}.")
+        note = self.devstore.add_note(game.store.world_id, turn, command.text, tags=command.tags,
+                                      anchor=command.anchor, excerpt=command.excerpt or self._excerpt(turn))
+        return self._single(DevNoteAdded(note.to_dict()))
+
+    def _excerpt(self, turn: int, size: int = 200) -> str:
+        """The start of a turn (the player's line, then the narration), to keep a note readable on its own."""
+        parts = []
+        for event in self.game.store.events(turn=turn, include_retracted=True):
+            if event.kind == "player.action":
+                parts.append(f"> {event.payload.get('text', '')}")
+            elif event.kind == "llm.call" and event.payload.get("narration"):
+                parts.append(event.payload["narration"])
+        text = " ".join(" ".join(parts).split())
+        return text if len(text) <= size else text[:size - 1].rstrip() + "…"
 
     async def _single(self, *events: ApiEvent) -> AsyncIterator[ApiEvent]:
         for event in events:

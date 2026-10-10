@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional, Sequence, Union
 
@@ -53,6 +54,29 @@ class WorldStore:
 
     def __exit__(self, *exc: Any) -> None:
         self.close()
+
+    @property
+    def world_id(self) -> str:
+        """A stable identity for this world, independent of where its file lives.
+
+        Made the first time it is asked for and kept in a small ``meta`` table (created on demand, so worlds
+        made before it existed get one too). Anything that refers to a world from outside it, such as the dev
+        store, keys on this. A copy of a world's file carries the id with it; call :meth:`new_world_id` on the
+        copy if it is to become a world of its own.
+        """
+        row = self._conn.execute("SELECT value FROM meta WHERE key = 'world_id'").fetchone() if self._has_meta() else None
+        return row[0] if row else self.new_world_id()
+
+    def new_world_id(self) -> str:
+        """Gives this world a new identity (for a copy that is to be a separate world) and returns it."""
+        self._conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        world_id = uuid.uuid4().hex
+        self._conn.execute("INSERT INTO meta (key, value) VALUES ('world_id', ?) "
+                           "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (world_id,))
+        return world_id
+
+    def _has_meta(self) -> bool:
+        return self._conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone() is not None
 
     @property
     def connection(self) -> sqlite3.Connection:

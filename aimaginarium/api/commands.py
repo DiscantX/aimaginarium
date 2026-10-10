@@ -146,16 +146,71 @@ class GetTrace(Command):
         since: Return only events after this trace sequence number.
         limit: Most events to return.
         turn: If given, only events of that turn.
+        around: With ``turn``, also the events of this many turns before and after it.
     """
 
     roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
     since: int = 0
     limit: int = 200
     turn: Optional[int] = None
+    around: int = 0
 
     def __post_init__(self) -> None:
-        if self.since < 0 or self.limit < 1:
-            raise ValueError("since must be 0 or more and limit at least 1")
+        if self.since < 0 or self.limit < 1 or self.around < 0:
+            raise ValueError("since and around must be 0 or more and limit at least 1")
+
+
+@command("add_dev_note")
+@dataclass(frozen=True)
+class AddDevNote(Command):
+    """Attaches a dev note to a turn (dev only).
+
+    A dev note is the developer's remark about the game (a continuity slip, a rule gone wrong), kept outside
+    the game: it never reaches an LLM prompt or the world state. It is not a player note.
+
+    Attributes:
+        text: What was noticed.
+        turn: The turn it is about; None for the latest turn.
+        tags: Free labels such as ``continuity``.
+        anchor: Where in the turn it points, such as ``{"trace_seq": 7}``; None for the turn as a whole.
+        excerpt: A short piece of text (such as a selection) that keeps the note readable on its own; empty
+            to let the server quote the turn.
+    """
+
+    roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
+    text: str = ""
+    turn: Optional[int] = None
+    tags: tuple[str, ...] = ()
+    anchor: Optional[dict[str, Any]] = None
+    excerpt: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.text.strip():
+            raise ValueError("a dev note needs some text")
+        object.__setattr__(self, "tags", tuple(self.tags))
+
+
+@command("get_dev_notes")
+@dataclass(frozen=True)
+class GetDevNotes(Command):
+    """Asks for the dev notes of this world (dev only).
+
+    Attributes:
+        turn: If given, only notes of that turn.
+        tag: If given, only notes with this tag.
+        status: If given, ``open`` or ``resolved`` notes only.
+        limit: Most notes to return.
+    """
+
+    roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
+    turn: Optional[int] = None
+    tag: Optional[str] = None
+    status: Optional[str] = None
+    limit: int = 200
+
+    def __post_init__(self) -> None:
+        if self.limit < 1 or self.status not in (None, "open", "resolved"):
+            raise ValueError("limit must be at least 1 and status 'open' or 'resolved'")
 
 
 def parse_command(data: Mapping[str, Any]) -> Command:

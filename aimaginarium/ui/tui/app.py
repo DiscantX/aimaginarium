@@ -10,10 +10,11 @@ from textual.widgets import Footer, Header, TabbedContent
 from textual_widgets import HorizontalSplitter, VerticalSplitter
 
 from ...api import (
-    CommandRejected, Envelope, GetPlayerView, OpenScene, Quit, Role, Session, StateChanged, StateView, SubmitAction,
+    AddDevNote, CommandRejected, DevNoteAdded, Envelope, GetPlayerView, OpenScene, Quit, Role, Session, StateChanged, StateView, SubmitAction,
     TurnRetracted, Undo,
 )
 from ...llm import ConfigError
+from .. import devnote
 from ..character import CharacterView, character_from_member, characters_from_view, demo_character
 from ..party import PartyMember, demo_party, party_from_view
 from .commands import DevCommands, PlayerCommands
@@ -126,7 +127,7 @@ class GameApp(App):
         self.runner = TurnRunner(self, self.session, self.story, self._set_busy)
         self.query_one(ActionInput).focus()
         if self.session.role is Role.DEV:
-            self.sub_title = "dev: /roll, /undo, /log, /party, /dock, F2 panels"
+            self.sub_title = "dev: /roll, /undo, /dn, /log, /party, /dock, F2 panels"
             self._watch_logs()
         self.run_worker(self._follow(), group="follow")
         await self._load_party()
@@ -315,6 +316,8 @@ class GameApp(App):
             await self._party_command(text.split()[1:])
         elif text.split()[:1] == ["/dock"] and self.session.role is Role.DEV:
             await self._dock_command(text.split()[1:])
+        elif text.split()[:1] and text.split()[0] in devnote.COMMANDS and self.session.role is Role.DEV:
+            await self._dev_note_command(text.split(maxsplit=1)[1] if " " in text else "")
         elif text == "/undo" and self.session.role is Role.DEV:
             await self.action_undo()
         elif text.split()[:1] == ["/log"] and self.session.role is Role.DEV:
@@ -340,6 +343,20 @@ class GameApp(App):
         async for envelope in self.session.send(Undo()):
             if isinstance(envelope.event, CommandRejected):
                 self.notify(envelope.event.message, severity="warning")
+
+    async def _dev_note_command(self, args: str) -> None:
+        """``/dn [turn] [#tag ...] text`` (or ``/dev-note``): attaches a dev note to a turn (the latest by default)."""
+        try:
+            parsed = devnote.parse(args)
+        except ValueError as exc:
+            self.story.add(str(exc), "system")
+            return
+        async for envelope in self.session.send(AddDevNote(parsed.text, parsed.turn, parsed.tags)):
+            event = envelope.event
+            if isinstance(event, DevNoteAdded):
+                self.story.add(devnote.confirmation(event.note), "system")
+            elif isinstance(event, CommandRejected):
+                self.story.add(event.message, "system")
 
     async def _party_command(self, args: list[str]) -> None:
         """``/party [n|off|top|right]``: n stand-in members (any number, default 4), the real party, or the placement."""

@@ -14,12 +14,13 @@ import textwrap
 from typing import Awaitable, Callable, Optional, Sequence
 
 from ...api import (
-    ChangesRejected, CheckCalled, CommandRejected, Done, GetPlayerView, GetState, GetTrace, Narration, OpenScene, Quit,
-    Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent, TurnRetracted,
+    AddDevNote, ChangesRejected, CheckCalled, CommandRejected, DevNoteAdded, Done, GetPlayerView, GetState, GetTrace,
+    Narration, OpenScene, Quit, Repairing, ReplyUnreadable, Role, Roll, RollResult, Session, StateView, SubmitAction, TraceEvent, TurnRetracted,
     Undo,
 )
 from ...llm import ConfigError
 from ...trace import format_timeline
+from .. import devnote
 from ..bootstrap import Runtime, add_common_arguments
 from .utils import Spinner, colorize, format_assistant_message, format_player_message
 
@@ -171,6 +172,20 @@ async def show_state(session: Session, out: Show, perspective: str = "player") -
     out((format_player_view(view.data) if view.perspective == "player" else "\n".join(view.data.values())) + "\n")
 
 
+async def add_dev_note(session: Session, out: Show, args: str) -> None:
+    """``/dn [turn] [#tag ...] text``: attaches a dev note to a turn (the latest by default)."""
+    try:
+        parsed = devnote.parse(args)
+    except ValueError as exc:
+        out(colorize(f"{exc}\n", "muted"))
+        return
+    for event in await collect(session.send(AddDevNote(parsed.text, parsed.turn, parsed.tags))):
+        if isinstance(event, DevNoteAdded):
+            out(colorize(devnote.confirmation(event.note) + "\n", "muted"))
+        elif isinstance(event, CommandRejected):
+            out(colorize(f"{event.message}\n", "muted"))
+
+
 async def show_trace(session: Session, out: Show, args: list[str]) -> None:
     """Prints one turn as a timeline (dev role only): ``/inspect [turn] [full]``."""
     wanted = next((int(a) for a in args if a.isdigit()), None)
@@ -209,7 +224,7 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
     """
     dev = session.role is Role.DEV
     out(colorize("Type what you do. /state shows your situation"
-                 + (", /state gm the GM's view, /inspect [turn] [full] the trace, /undo takes back the last turn"
+                 + (", /state gm the GM's view, /inspect [turn] [full] the trace, /undo takes back the last turn, /dn adds a dev note"
                     if dev else "") + ", /quit leaves.\n", "muted"))
     try:
         if opening:
@@ -230,6 +245,8 @@ async def play(session: Session, ask: Ask = ask_input, out: Show = show, opening
                 await show_state(session, out, "gm")
             elif text == "/undo" and dev:
                 await undo_turn(session, out)
+            elif text.split()[:1] and text.split()[0] in devnote.COMMANDS and dev:
+                await add_dev_note(session, out, text.split(maxsplit=1)[1] if " " in text else "")
             elif text.split()[:1] == ["/inspect"] and dev:
                 await show_trace(session, out, text.split()[1:])
             elif text.startswith("/"):
