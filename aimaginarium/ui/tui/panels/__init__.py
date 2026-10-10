@@ -18,7 +18,7 @@ class DevPanel(Vertical):
     """
 
     title = "Panel"
-    BINDINGS = [Binding("c", "copy", "Copy raw")]
+    BINDINGS = [Binding("c", "copy", "Copy raw"), Binding("p", "toggle_view", "Pretty / JSON")]
 
     def copy_text(self) -> str:
         """The exact text ``c`` copies (empty if there is nothing selected)."""
@@ -29,6 +29,16 @@ class DevPanel(Vertical):
         if text:
             self.app.copy_to_clipboard(text)
             self.app.notify(f"Copied {len(text):,} characters (raw JSON)")
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """``p`` only exists on a panel that shows a payload."""
+        if action == "toggle_view":
+            from ..views import PayloadView
+            return bool(self.query(PayloadView))
+        return True
+
+    def action_toggle_view(self) -> None:
+        self.app.set_payload_mode("json" if self.app.payload_mode == "pretty" else "pretty")  # type: ignore[attr-defined]
 
     def on_envelope(self, envelope: Envelope) -> None:
         """Called with every envelope the session streams, in order."""
