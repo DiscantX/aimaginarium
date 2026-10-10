@@ -155,3 +155,23 @@ A player-facing panel (it is not a dev panel and every role gets it). The data m
 - Whether the card background should carry meaning (for example a downed member, or whose turn it is in combat); it is unchanged for now, the selected card being the only one with a different background.
 - Collapse to a single row; whether the Notes panel is per character, with the controller deciding who writes.
 - The engine's party model and the cost of many AI-controlled members (see the single-writer note in [multiplayer](multiplayer-and-api.md)).
+
+## As built: the character panel (#83)
+
+A player-facing panel (every role gets it) in a left column, following the party bar's selection (`GameApp.viewed`). The data model is `aimaginarium/ui/character.py` (`CharacterView`, shared by every client); the widget is `aimaginarium/ui/tui/character.py` (`CharacterPanel`).
+
+**[Decided]** The panel shows all that is known about the viewed character. It is resizable with a splitter like the dev dock (default 40 cells, wide enough for most elements to sit on their own line) and collapsible. It was modelled on the character sheet of a reference web game (the screenshots Ficus shared); it need not match it.
+
+**[Decided]** What is shown of other characters follows the projection model: only what the viewer's character knows. The panel renders whatever the API sends and leaves out every section that has nothing in it, so a little-known character shows little. A viewed character who is not the player's own is marked "Viewing, not your character".
+
+**[Proposed]** Contents, top to bottom: name (with the controller tag), identity line (race, class and level, background, alignment), AC, proficiency bonus, inspiration, HP bar (with temporary HP), XP, the six ability scores with modifiers, then collapsible sections: Skills, Proficiencies, Equipment, Inventory (coins and carried items, open by default), Features, Spells, Conditions (open by default), About (description and known facts). Every field is optional; the set is expected to be reorganised as more becomes known about a character (spells, etc).
+
+**[Proposed]** Engine side: the player's own view carries these `sheet` keys alongside the skills (a whitelist, `SHEET_KEYS` in `engine/view.py`; nothing else in a sheet is shown): `race`, `class`, `level`, `background`, `alignment`, `ac`, `proficiency`, `inspiration`, `hp`, `max_hp`, `temp_hp`, `xp`, `xp_next`, `abilities`, `proficiencies`, `equipment`, `coins`, `features`, `spells`, `statuses`. The sheet is data only for now: the engine does not enforce hit points or levels. The demo world's Kael has a fuller sheet to show this. A `party` entry in a player view may carry its own `character` projection, and a member without one falls back to what its card knows.
+
+**[Proposed]** `F5` (and the palette) toggles the panel. The dev `/party n` stand-ins get made-up full sheets (`demo_character`) so the panel can be judged with a party.
+
+**[Open]**
+- Whether what a viewer sees of a character depends on the relationship (a party member showing much more than a stranger), and whether the same panel will later show NPCs; the reference game shows NPCs with notes and a description in a popup, and a disposition tag.
+- Whether the panel's sections are collapsed or open by default per player, and remembering the choice.
+- Where hit points and levels will be enforced, and how spells, features and other rules data enter the sheet.
+- Notes: whether the Notes panel is per character.

@@ -7,6 +7,7 @@ not learn. (Player-facing projections are a later layer.)
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 from ..world import Entity, Fact, WorldStore
@@ -62,6 +63,12 @@ def render_state(store: WorldStore, player_id: str) -> dict[str, str]:
     return {"world_state": "\n".join(lines), "character": "\n".join(character)}
 
 
+SHEET_KEYS = ("race", "class", "level", "background", "alignment", "ac", "proficiency", "inspiration", "hp", "max_hp",
+              "temp_hp", "xp", "xp_next", "abilities", "proficiencies", "equipment", "coins", "features", "spells",
+              "statuses")
+"""The parts of a character sheet the player's own view carries (a whitelist: nothing else in a sheet is shown)."""
+
+
 def _known(entity: Entity, player_id: str) -> list[str]:
     """Returns the facts about an entity that the player's character may know."""
     return [f.text for f in entity.established if f.known_by is None or player_id in f.known_by]
@@ -84,7 +91,8 @@ def render_player_view(store: WorldStore, player_id: str) -> dict[str, Any]:
         player_id: The player character's entity id.
 
     Returns:
-        ``location``, ``exits``, ``here``, ``character`` and ``carrying``.
+        ``location``, ``exits``, ``here``, ``character`` (with the sheet keys in :data:`SHEET_KEYS` when it has
+        them) and ``carrying``.
     """
     player = store.get_entity(player_id)
     location_id = store.location_of(player_id)
@@ -93,6 +101,8 @@ def render_player_view(store: WorldStore, player_id: str) -> dict[str, Any]:
         view["location"] = _seen(store.get_entity(location_id), player_id)
         view["exits"] = [{"to": store.get_entity(c["to_id"]).name, "label": c["label"]} for c in store.connections(location_id)]
         view["here"] = [_seen(e, player_id) for e in store.children(location_id) if e.id != player_id]
-    view["character"] = {**_seen(player, player_id), "skills": dict(player.data.get("sheet", {}).get("skills", {}))}
+    sheet = player.data.get("sheet", {})
+    view["character"] = {**_seen(player, player_id), "skills": dict(sheet.get("skills", {})),
+                         **{key: copy.deepcopy(sheet[key]) for key in SHEET_KEYS if key in sheet}}
     view["carrying"] = [_seen(e, player_id) for e in store.children(player_id)]
     return view
