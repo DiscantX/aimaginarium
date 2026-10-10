@@ -6,6 +6,7 @@ that has nothing in it, so a character that is little known (another party membe
 
 from __future__ import annotations
 
+from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
 from textual.app import ComposeResult
@@ -13,6 +14,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Collapsible, Static
 
 from ..character import ABILITIES, COINS, CharacterView, modifier, signed
+from .hanging import Hanging
 from .party import CONTROLLER_TAGS, hp_bar, hp_style
 
 SECTIONS = (
@@ -63,11 +65,11 @@ class CharacterPanel(VerticalScroll):
         widget.update(content)
         widget.display = bool(content) if isinstance(content, (str, Text)) else True
 
-    def _section(self, key: str, title: str, lines: list[Text], count: int | None = None) -> None:
+    def _section(self, key: str, title: str, lines: list[RenderableType], count: int | None = None) -> None:
         section = self.query_one(f"#cp-sec-{key}", Collapsible)
         section.display = bool(lines)
         section.title = f"{title} ({count})" if count else title
-        self.query_one(f"#cp-{key}", Static).update(Text("\n").join(lines))
+        self.query_one(f"#cp-{key}", Static).update(Group(*lines))
 
     def show(self, view: CharacterView | None) -> None:
         """Shows this character, or an empty panel for ``None``."""
@@ -122,13 +124,13 @@ class CharacterPanel(VerticalScroll):
         inventory = [Text(" ").join(Text.assemble((c.upper(), dim), f" {view.coins[c]}") for c in COINS if c in view.coins)]
         inventory = inventory if view.coins else []
         for item in view.inventory:
-            inventory.append(Text.assemble(item.name, (f"\n  {item.description}", dim) if item.description else ""))
+            inventory.append(Group(Text(item.name), *([Hanging(Text(item.description, style=dim), "  ")] if item.description else [])))
         self._section("inventory", "Inventory", inventory, len(view.inventory))
         self._section("features", "Features", [Text(f) for f in view.features])
         self._section("spells", "Spells", [Text(s) for s in view.spells], len(view.spells))
         self._section("conditions", "Conditions", [Text(s) for s in view.statuses])
-        about = [Text(view.description)] if view.description else []
-        about += [Text(f"• {fact}") for fact in view.facts]
+        about: list[RenderableType] = [Text(view.description)] if view.description else []
+        about += [Hanging(Text(fact), "• ") for fact in view.facts]
         self._section("about", "About", about)
 
         nothing = not (view.identity or view.ac is not None or view.hp is not None or view.abilities or view.xp is not None

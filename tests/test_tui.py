@@ -465,3 +465,45 @@ def test_the_log_tab_receives_records_from_any_logger_and_the_dev_log_command():
             await until(pilot, lambda: len(pane.shown) == 2)
             assert "httpx" in pane.shown[0] and "something odd" in pane.shown[1]
     run(scenario)
+
+
+def test_hiding_the_dock_leaves_the_character_splitter_and_the_story_fills_the_space():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            story, dock = app.query_one("#story-column"), app.query_one("#dev-dock")
+            splitter = app.query_one("#dock-splitter")
+            x, y = splitter.region.x, splitter.region.y + 3
+            await pilot.mouse_down(None, offset=(x, y))
+            await pilot.hover(None, offset=(x - 12, y))
+            await pilot.mouse_up(None, offset=(x - 12, y))
+            await pilot.pause()
+            dragged = story.outer_size.width
+            await pilot.press("f2")
+            await pilot.pause()
+            assert not dock.display and not splitter.display
+            assert app.query_one("#character-splitter").display                      # #86
+            assert story.outer_size.width > dragged + dock.outer_size.width // 2     # #87: it fills the freed space
+            right_edge = story.region.x + story.outer_size.width
+            assert right_edge >= app.size.width - 1
+            await pilot.press("f2")
+            await pilot.pause()
+            assert dock.display and splitter.display and story.outer_size.width == dragged   # the dragged width returns
+    run(scenario)
+
+
+def test_the_state_toggle_keeps_its_size_when_focused():
+    async def scenario():
+        app = make_app([], role=Role.DEV)
+        async with app.run_test(size=(160, 44)) as pilot:
+            from textual.widgets import RadioSet, TabbedContent
+            app.query_one(TabbedContent).active = "tab-stateinspector"
+            await pilot.pause(0.3)
+            radios = app.query_one(StateInspector).query_one(RadioSet)
+            app.query_one(ActionInput).focus()
+            await pilot.pause()
+            before = radios.outer_size
+            radios.focus()
+            await pilot.pause()
+            assert radios.has_focus and radios.outer_size == before                  # #89
+    run(scenario)

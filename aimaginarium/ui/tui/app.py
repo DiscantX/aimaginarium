@@ -65,6 +65,8 @@ class GameApp(App):
         self.characters: dict[str, CharacterView] = {}
         self.viewed: PartyMember | None = None
         """The party member being viewed (what a character panel shows); input still goes to the player's own."""
+        self._story_width = None
+        """The story column's dragged width, kept while the dev dock is hidden."""
         self._demo_party_size: int | None = None
         self._party_shown: bool | None = None
         """The player's choice to show or hide the party bar; ``None`` leaves it to the party size."""
@@ -85,7 +87,7 @@ class GameApp(App):
                 yield Thinking(id="thinking")
                 yield ActionInput(placeholder="What do you do?", id="action")
             if dev:
-                yield VerticalSplitter(target_id="story-column", min_size=40)
+                yield VerticalSplitter(target_id="story-column", min_size=40, id="dock-splitter")
                 with TabbedContent(id="dev-dock"):
                     yield from dock_panes()
             if self.settings.party_placement != "top":
@@ -326,10 +328,24 @@ class GameApp(App):
             self.run_worker(preview_roll(self, self.story, []))
 
     def action_toggle_dock(self) -> None:
-        for dock in self.query("#dev-dock, VerticalSplitter"):
-            dock.display = not dock.display
-        self.query_one("#story-column").set_class(bool(self.query("#dev-dock")) and self.query_one("#dev-dock").display,
-                                                  "with-dock")
+        """Shows or hides the dev dock and its own splitter (the character panel's splitter stays).
+
+        Dragging the splitter gives the story column a width in cells, which would leave the space of a hidden
+        dock empty; so the dragged width is put away while the dock is hidden (the column then fills the space
+        by its stylesheet rule) and put back when the dock returns.
+        """
+        if not self.query("#dev-dock"):
+            return
+        dock, story = self.query_one("#dev-dock"), self.query_one("#story-column")
+        show = not dock.display
+        for part in (dock, self.query_one("#dock-splitter")):
+            part.display = show
+        if show:
+            story.styles.width = self._story_width
+        else:
+            self._story_width = story.styles.width
+            story.styles.width = None
+        story.set_class(show, "with-dock")
 
     async def action_quit(self) -> None:
         async for _ in self.session.send(Quit()):

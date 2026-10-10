@@ -9,6 +9,8 @@ from typing import Any
 
 from rich.text import Text
 
+from ..hanging import Blocks, Hanging
+
 NEWLINE = "↵"
 BAR = "│ "
 
@@ -18,62 +20,54 @@ def raw(value: Any) -> str:
     return json.dumps(value, indent=2, default=str, ensure_ascii=False)
 
 
-def pretty(value: Any) -> Text:
-    """A readable rendering of a payload; strings with newlines become blocks with visible newline marks."""
-    text = Text()
-    _write(text, value, 0)
-    text.rstrip()
-    return text
+def pretty(value: Any) -> Blocks:
+    """A readable rendering of a payload; strings with newlines become blocks with visible newline marks.
+
+    Every line is its own :class:`~aimaginarium.ui.tui.hanging.Hanging` block, so a line that wraps keeps its
+    indent (and, inside a multi-line string, its gutter) on every continuation line.
+    """
+    blocks: list[Hanging] = []
+    _write(blocks, value, 0)
+    return Blocks(blocks)
 
 
-def _scalar(text: Text, value: Any) -> None:
+def _scalar(value: Any) -> Text:
     if isinstance(value, str):
-        text.append(json.dumps(value, ensure_ascii=False), style="green")
-    elif value is None or isinstance(value, (bool, int, float)):
-        text.append(json.dumps(value), style="yellow")
-    else:
-        text.append(str(value))
+        return Text(json.dumps(value, ensure_ascii=False), style="green")
+    if value is None or isinstance(value, (bool, int, float)):
+        return Text(json.dumps(value), style="yellow")
+    if isinstance(value, (dict, list)):
+        return Text(json.dumps(value))  # only an empty one gets here
+    return Text(str(value))
 
 
-def _write(text: Text, value: Any, level: int) -> None:
+def _write(blocks: list[Hanging], value: Any, level: int) -> None:
     pad = "  " * level
     if isinstance(value, dict) and value:
         items = value.items()
     elif isinstance(value, list) and value:
         items = ((f"[{i}]", item) for i, item in enumerate(value))
+    elif isinstance(value, str) and "\n" in value:
+        _block(blocks, value, level)
+        return
     else:
-        text.append(pad)
-        _block_or_scalar(text, value, level)
+        blocks.append(Hanging(_scalar(value), pad))
         return
     for key, item in items:
-        text.append(f"{pad}{key}:", style="bold")
+        label = Text(f"{key}:", style="bold")
         if isinstance(item, (dict, list)) and item:
-            text.append("\n")
-            _write(text, item, level + 1)
+            blocks.append(Hanging(label, pad))
+            _write(blocks, item, level + 1)
         elif isinstance(item, str) and "\n" in item:
-            text.append("\n")
-            _block(text, item, level + 1)
+            blocks.append(Hanging(label, pad))
+            _block(blocks, item, level + 1)
         else:
-            text.append(" ")
-            _scalar(text, item if not isinstance(item, (dict, list)) else json.dumps(item))
-            text.append("\n")
+            blocks.append(Hanging(Text.assemble(label, " ", _scalar(item)), pad, pad + "  "))
 
 
-def _block_or_scalar(text: Text, value: Any, level: int) -> None:
-    if isinstance(value, str) and "\n" in value:
-        text.append("\n")
-        _block(text, value, level)
-    else:
-        _scalar(text, value if not isinstance(value, (dict, list)) else json.dumps(value))
-        text.append("\n")
-
-
-def _block(text: Text, value: str, level: int) -> None:
-    pad = "  " * level
+def _block(blocks: list[Hanging], value: str, level: int) -> None:
+    gutter = Text("  " * level + BAR, style="dim")
     lines = value.split("\n")
     for i, line in enumerate(lines):
-        text.append(pad + BAR, style="dim")
-        text.append(line)
-        if i < len(lines) - 1:
-            text.append(NEWLINE, style="dim")
-        text.append("\n")
+        mark = Text(NEWLINE, style="dim") if i < len(lines) - 1 else Text()
+        blocks.append(Hanging.gutter(Text.assemble(line, mark), gutter))

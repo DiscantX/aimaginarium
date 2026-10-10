@@ -22,7 +22,9 @@ class StateInspector(DevPanel):
     """The text currently shown, without styling."""
     DEFAULT_CSS = """
     StateInspector .toggle { height: auto; }
-    StateInspector RadioSet { layout: horizontal; width: auto; height: auto; border: none; background: transparent; }
+    StateInspector RadioSet { layout: horizontal; width: auto; height: auto; background: transparent;
+                              border: tall transparent; }
+    StateInspector RadioSet:focus { border: tall $border; }
     StateInspector #body { height: 1fr; padding: 0 1; }
     """
 
