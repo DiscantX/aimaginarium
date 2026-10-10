@@ -5,9 +5,9 @@ import logging
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Footer, Header, TabbedContent
-from textual_widgets import VerticalSplitter
+from textual_widgets import HorizontalSplitter, VerticalSplitter
 
 from ...api import (
     CommandRejected, Envelope, GetPlayerView, OpenScene, Quit, Role, Session, StateChanged, StateView, SubmitAction,
@@ -43,8 +43,13 @@ class GameApp(App):
     TITLE = "AImaginarium"
     CSS = """
     #story-column { width: 1fr; }
-    #story-column.with-dock { width: 11fr; }
-    #dev-dock { width: 9fr; }
+    #workspace { layout: horizontal; }
+    #workspace.dock-bottom { layout: vertical; }
+    #dev-dock { width: 1fr; height: 1fr; }
+    #workspace.dock-shown.dock-right #main { width: 11fr; }
+    #workspace.dock-shown.dock-right #dev-dock { width: 9fr; }
+    #workspace.dock-shown.dock-bottom #main { height: 3fr; }
+    #workspace.dock-shown.dock-bottom #dev-dock { height: 2fr; }
     ActionInput { margin: 0 1; }
     """
     BINDINGS = [
@@ -68,8 +73,9 @@ class GameApp(App):
         """The party member being viewed (what a character panel shows); input still goes to the player's own."""
         self.payload_mode = "pretty"
         """How every payload view in the dev dock is shown: ``"pretty"`` or ``"json"``."""
-        self._story_width = None
-        """The story column's dragged width, kept while the dev dock is hidden."""
+        self._dock_sizes: dict[str, object] = {"right": None, "bottom": None}
+        """The dragged size of the play area (``#main``: its width with the dock on the right, its height with the
+        dock at the bottom) for each placement, kept while the dock is hidden or placed elsewhere."""
         self._demo_party_size: int | None = None
         self._party_shown: bool | None = None
         """The player's choice to show or hide the party bar; ``None`` leaves it to the party size."""
@@ -80,22 +86,39 @@ class GameApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         dev = self.session.role is Role.DEV
-        if self.settings.party_placement == "top":
+        party = self.settings.party_placement
+        if party == "top":
             yield PartyBar("top", id="party")
-        with Horizontal(id="main"):
-            yield CharacterPanel(id="character-panel")
-            yield VerticalSplitter(target_id="character-panel", min_size=28, id="character-splitter")
-            with Vertical(id="story-column", classes="with-dock" if dev else ""):
-                yield StoryLog(id="story")
-                yield Thinking(id="thinking")
-                yield ActionInput(placeholder="What do you do?", id="action")
+        with Container(id="workspace", classes=self._workspace_classes(dev)):
+            with Horizontal(id="main"):
+                yield CharacterPanel(id="character-panel")
+                yield VerticalSplitter(target_id="character-panel", min_size=28, id="character-splitter")
+                with Vertical(id="story-column"):
+                    yield StoryLog(id="story")
+                    yield Thinking(id="thinking")
+                    yield ActionInput(placeholder="What do you do?", id="action")
+                if party == "right" and not self._dock_on_right:
+                    yield PartyBar("right", id="party")
             if dev:
-                yield VerticalSplitter(target_id="story-column", min_size=40, id="dock-splitter")
+                yield self._dock_splitter()
                 with TabbedContent(id="dev-dock"):
                     yield from dock_panes()
-            if self.settings.party_placement != "top":
-                yield PartyBar(self.settings.party_placement, id="party")
+            if party == "right" and self._dock_on_right:
+                yield PartyBar("right", id="party")
         yield Footer()
+
+    @property
+    def _dock_on_right(self) -> bool:
+        return self.session.role is Role.DEV and self.settings.dock_placement == "right"
+
+    def _workspace_classes(self, dev: bool) -> str:
+        return f"dock-{self.settings.dock_placement} dock-shown" if dev else ""
+
+    def _dock_splitter(self) -> VerticalSplitter | HorizontalSplitter:
+        """The dock's splitter: it sizes the play area, sideways beside the dock or up and down above it."""
+        if self.settings.dock_placement == "right":
+            return VerticalSplitter(target_id="main", min_size=50, id="dock-splitter")
+        return HorizontalSplitter(target_id="main", min_size=8, id="dock-splitter")
 
     async def on_mount(self) -> None:
         self.register_theme(CANDLELIT)
@@ -103,7 +126,7 @@ class GameApp(App):
         self.runner = TurnRunner(self, self.session, self.story, self._set_busy)
         self.query_one(ActionInput).focus()
         if self.session.role is Role.DEV:
-            self.sub_title = "dev: /roll, /undo, /log, /party, F2 panels"
+            self.sub_title = "dev: /roll, /undo, /log, /party, /dock, F2 panels"
             self._watch_logs()
         self.run_worker(self._follow(), group="follow")
         await self._load_party()
@@ -179,11 +202,18 @@ class GameApp(App):
         if placement == self.settings.party_placement:
             return
         self.settings.party_placement = placement
+        await self._remount_party()
+
+    async def _remount_party(self) -> None:
+        """Puts the party bar where its placement says (and where the dock leaves room), keeping party and selection."""
+        placement = self.settings.party_placement
         selected = self.viewed.id if self.viewed else None
         await self.query_one(PartyBar).remove()
         bar = PartyBar(placement, id="party")
         if placement == "top":
-            await self.mount(bar, before="#main")
+            await self.mount(bar, before="#workspace")
+        elif self._dock_on_right:
+            await self.query_one("#workspace").mount(bar)       # the far right, past the dock
         else:
             await self.query_one("#main").mount(bar)
         await bar.set_party(self.party)
@@ -283,6 +313,8 @@ class GameApp(App):
             self.run_worker(preview_roll(self, self.story, text.split()[1:]))
         elif text.split()[:1] == ["/party"] and self.session.role is Role.DEV:
             await self._party_command(text.split()[1:])
+        elif text.split()[:1] == ["/dock"] and self.session.role is Role.DEV:
+            await self._dock_command(text.split()[1:])
         elif text == "/undo" and self.session.role is Role.DEV:
             await self.action_undo()
         elif text.split()[:1] == ["/log"] and self.session.role is Role.DEV:
@@ -336,25 +368,78 @@ class GameApp(App):
         for view in self.query(PayloadView):
             view.refresh_mode()
 
+    def _remember_dock_size(self) -> None:
+        """Puts the play area's dragged size away (and clears it, so the stylesheet sizes it again)."""
+        main = self.query_one("#main")
+        attr = "width" if self.settings.dock_placement == "right" else "height"
+        self._dock_sizes[self.settings.dock_placement] = getattr(main.styles.inline, attr)
+        main.styles.width = None
+        main.styles.height = None
+
+    def _restore_dock_size(self) -> None:
+        placement = self.settings.dock_placement
+        size = self._dock_sizes[placement]
+        if size is not None:
+            setattr(self.query_one("#main").styles, "width" if placement == "right" else "height", size)
+
     def action_toggle_dock(self) -> None:
         """Shows or hides the dev dock and its own splitter (the character panel's splitter stays).
 
-        Dragging the splitter gives the story column a width in cells, which would leave the space of a hidden
-        dock empty; so the dragged width is put away while the dock is hidden (the column then fills the space
-        by its stylesheet rule) and put back when the dock returns.
+        Dragging the splitter gives the play area a size in cells, which would leave the space of a hidden dock
+        empty; so the dragged size is put away while the dock is hidden (the play area then fills the space by
+        its stylesheet rule) and put back when the dock returns.
         """
         if not self.query("#dev-dock"):
             return
-        dock, story = self.query_one("#dev-dock"), self.query_one("#story-column")
+        dock, workspace = self.query_one("#dev-dock"), self.query_one("#workspace")
         show = not dock.display
+        if not show:
+            self._remember_dock_size()
         for part in (dock, self.query_one("#dock-splitter")):
             part.display = show
+        workspace.set_class(show, "dock-shown")
         if show:
-            story.styles.width = self._story_width
+            self._restore_dock_size()
+
+    async def set_dock_placement(self, placement: str) -> None:
+        """Moves the dev dock to the ``right`` or the ``bottom`` (dev role).
+
+        The dock and its panels stay where they are in the widget tree, so the selected tab, the trace and the log
+        all survive; only the layout flips and the splitter is swapped for the other direction. Each placement
+        remembers the size it was dragged to.
+        """
+        if placement not in ("right", "bottom"):
+            raise ValueError(f"unknown dock placement {placement!r}; use 'right' or 'bottom'")
+        if self.session.role is not Role.DEV or placement == self.settings.dock_placement:
+            return
+        dock, workspace = self.query_one("#dev-dock"), self.query_one("#workspace")
+        shown = dock.display
+        if shown:
+            self._remember_dock_size()
+        self.settings.dock_placement = placement
+        workspace.set_class(placement == "right", "dock-right")
+        workspace.set_class(placement == "bottom", "dock-bottom")
+        await self.query_one("#dock-splitter").remove()
+        splitter = self._dock_splitter()
+        splitter.display = shown
+        await workspace.mount(splitter, before="#dev-dock")
+        if shown:
+            self._restore_dock_size()
+        if self.settings.party_placement == "right":
+            await self._remount_party()                          # it sits past the dock, or inside the play area
+
+    async def action_move_dock(self) -> None:
+        """Moves the dev dock to the other side."""
+        await self.set_dock_placement("bottom" if self.settings.dock_placement == "right" else "right")
+
+    async def _dock_command(self, args: list[str]) -> None:
+        """``/dock [right|bottom]``: moves the dock (no argument: to the other side)."""
+        if not args:
+            await self.action_move_dock()
+        elif args[0] in ("right", "bottom"):
+            await self.set_dock_placement(args[0])
         else:
-            self._story_width = story.styles.width
-            story.styles.width = None
-        story.set_class(show, "with-dock")
+            self.story.add("Usage: /dock [right|bottom]", "system")
 
     async def action_quit(self) -> None:
         async for _ in self.session.send(Quit()):

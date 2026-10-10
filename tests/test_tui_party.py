@@ -106,8 +106,17 @@ def test_the_bar_can_sit_on_the_right_and_an_unknown_placement_is_refused():
         async with app.run_test(size=(120, 36)) as pilot:
             app.set_demo_party(3)
             await until(pilot, lambda: len(bar(app).cards()) == 3)
-            assert bar(app).parent.id == "main" and bar(app).has_class("-right")
+            assert bar(app).parent.id == "workspace" and bar(app).has_class("-right")   # past the dev dock
     run(scenario)
+
+    async def player():
+        app = make_app([], role=Role.PLAYER)
+        app.settings.party_placement = "right"
+        async with app.run_test(size=(120, 36)) as pilot:
+            app.set_demo_party(3)
+            await pilot.pause(0.2)
+            assert bar(app).parent.id == "main"                                          # no dock: inside the play area
+    run(player)
     with pytest.raises(ValueError):
         PartyBar("bottom")
 
@@ -139,12 +148,12 @@ def test_the_bar_moves_between_top_and_right_keeping_the_party_and_selection():
             bar(app).select(bar(app).members[2].id)
             await act(pilot, "/party right")
             await until(pilot, lambda: bar(app).has_class("-right"))
-            assert bar(app).parent.id == "main" and len(bar(app).cards()) == 4 and bar(app).display
+            assert bar(app).parent.id == "workspace" and len(bar(app).cards()) == 4 and bar(app).display
             assert bar(app).selected.id == app.viewed.id == bar(app).members[2].id
             assert app.settings.party_placement == "right"
             await app.action_move_party()  # the palette entry, open to every role
             assert bar(app).has_class("-top") and len(bar(app).cards()) == 4 and bar(app).selected.id == app.viewed.id
-            assert list(app.screen.children).index(bar(app)) < list(app.screen.children).index(app.query_one("#main"))
+            assert list(app.screen.children).index(bar(app)) < list(app.screen.children).index(app.query_one("#workspace"))
     run(scenario)
 
 

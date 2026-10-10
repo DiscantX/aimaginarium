@@ -12,10 +12,13 @@ class Settings:
             player to continue.
         roll_hold: Seconds the finished roll stays up when ``roll_auto_close`` is on.
         party_placement: Where the party bar sits: ``"top"`` (a row under the header) or ``"right"`` (a column).
+        dock_placement: Where the dev dock sits (dev role only): ``"right"`` (a column beside the story) or
+            ``"bottom"`` (a panel under everything).
         party_always_show: Show the party bar even when the party is only the player's own character.
     """
 
     roll_auto_close: bool = False
     roll_hold: float = 2.5
     party_placement: str = "top"
+    dock_placement: str = "right"
     party_always_show: bool = False
