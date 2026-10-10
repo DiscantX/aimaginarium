@@ -12,10 +12,12 @@ class DevCommands(Provider):
         app = self.app
         if getattr(getattr(app, "session", None), "role", None) is not Role.DEV:
             return []
+        side = "bottom" if app.settings.dock_placement == "right" else "right"
         return [
             ("Undo last turn", "Take back the latest turn", app.action_undo),
             ("Preview a roll", "Open the roll window on a made-up check", app.action_preview_roll),
             ("Toggle dev panels", "Show or hide the dock", app.action_toggle_dock),
+            (f"Move dev panels to the {side}", "Switch the dock between a column and a bottom panel", app.action_move_dock),
             ("Toggle stand-in party", "Show a made-up party of four on the party bar", app.action_toggle_demo_party),
         ]
 
