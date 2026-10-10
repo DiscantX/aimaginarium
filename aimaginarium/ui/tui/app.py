@@ -28,6 +28,7 @@ from .runner import TurnRunner
 from .settings import Settings
 from .story import StoryLog
 from .thinking import Thinking
+from .views import PayloadView
 from .theme import CANDLELIT, ROLE_DEFAULTS
 
 
@@ -65,6 +66,8 @@ class GameApp(App):
         self.characters: dict[str, CharacterView] = {}
         self.viewed: PartyMember | None = None
         """The party member being viewed (what a character panel shows); input still goes to the player's own."""
+        self.payload_mode = "pretty"
+        """How every payload view in the dev dock is shown: ``"pretty"`` or ``"json"``."""
         self._story_width = None
         """The story column's dragged width, kept while the dev dock is hidden."""
         self._demo_party_size: int | None = None
@@ -326,6 +329,12 @@ class GameApp(App):
     def action_preview_roll(self) -> None:
         if self.session.role is Role.DEV:
             self.run_worker(preview_roll(self, self.story, []))
+
+    def set_payload_mode(self, mode: str) -> None:
+        """Switches every payload view (State, Trace, Diffs, Checks) between pretty and JSON together."""
+        self.payload_mode = mode
+        for view in self.query(PayloadView):
+            view.refresh_mode()
 
     def action_toggle_dock(self) -> None:
         """Shows or hides the dev dock and its own splitter (the character panel's splitter stays).

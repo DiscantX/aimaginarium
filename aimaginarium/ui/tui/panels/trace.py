@@ -2,17 +2,15 @@
 
 from datetime import datetime
 
-from rich.syntax import Syntax
 from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.containers import VerticalScroll
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
 from textual_widgets import HorizontalSplitter
 
 from ....api import Envelope, TraceEvent
 from ....trace import summarize
 from . import DevPanel, dev_panel
-from .pretty import pretty, raw
+from ..views import PayloadView
+from .pretty import raw
 
 
 @dev_panel
@@ -20,29 +18,26 @@ class TraceTimeline(DevPanel):
     """A row per trace record (turn, offset, kind, summary); the highlighted row's payload shows underneath.
 
     The payload is shown *pretty* by default (multi-line strings as blocks, each real newline marked ``↵``)
-    or *raw* (the exact JSON, newlines as ``\\n``); ``p`` switches, ``c`` copies the raw JSON.
+    or as the exact JSON (newlines as ``\\n``); ``p`` switches (a bar says which), ``c`` copies the raw JSON, and
+    the mouse selects and copies exactly the text shown.
     """
 
     title = "Trace"
-    BINDINGS = [Binding("p", "toggle_pretty", "Pretty / raw")]
     DEFAULT_CSS = """
     TraceTimeline #trace-rows { height: 2fr; }
-    TraceTimeline #detail { height: 1fr; padding: 0 1; }
+    TraceTimeline #detail { height: 1fr; }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.records: dict[str, TraceEvent] = {}
-        self.pretty_mode = True
         self.selected: TraceEvent | None = None
-        self.shown = ""
         self._start: datetime | None = None
 
     def compose(self) -> ComposeResult:
         yield DataTable(cursor_type="row", zebra_stripes=True, id="trace-rows")
         yield HorizontalSplitter(target_id="trace-rows", min_size=4)
-        with VerticalScroll(id="detail"):
-            yield Static("", id="payload")
+        yield PayloadView(id="detail")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns("turn", "offset", "kind", "summary")
@@ -64,21 +59,14 @@ class TraceTimeline(DevPanel):
         self.selected = self.records.get(message.row_key.value or "")
         self._show()
 
-    def action_toggle_pretty(self) -> None:
-        self.pretty_mode = not self.pretty_mode
-        self._show()
+    @property
+    def shown(self) -> str:
+        """The selected payload as shown, unwrapped (pretty text or exact JSON, by the current mode)."""
+        return self.query_one(PayloadView).shown
 
     def _show(self) -> None:
-        if self.selected is None:
-            return
-        payload = self.query_one("#payload", Static)
-        if self.pretty_mode:
-            text = pretty(self.selected.payload)
-            self.shown = text.plain
-            payload.update(text)
-        else:
-            self.shown = raw(self.selected.payload)
-            payload.update(Syntax(self.shown, "json", word_wrap=True, background_color="default"))
+        if self.selected is not None:
+            self.query_one(PayloadView).show(self.selected.payload)
 
     def copy_text(self) -> str:
         return raw(self.selected.payload) if self.selected else ""

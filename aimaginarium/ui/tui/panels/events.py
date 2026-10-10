@@ -7,14 +7,14 @@ from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
-from textual.widgets import Static, Tree
+from textual.widgets import Tree
 from textual.widgets.tree import TreeNode
 from textual_widgets import HorizontalSplitter
 
 from ....api import Envelope, TraceEvent
 from . import DevPanel, dev_panel
-from .pretty import pretty, raw
+from ..views import PayloadView
+from .pretty import raw
 
 
 def fit(line: str, width: int) -> str:
@@ -33,13 +33,12 @@ class EventTree(DevPanel):
     kind = ""
     DEFAULT_CSS = """
     EventTree Tree { height: 2fr; }
-    EventTree #detail { height: 1fr; padding: 0 1; }
+    EventTree #detail { height: 1fr; }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.selected: Any = None
-        self.shown = ""
         self._labels: dict[int, tuple[TreeNode, str]] = {}
 
     def compose(self) -> ComposeResult:
@@ -47,8 +46,7 @@ class EventTree(DevPanel):
         tree.show_root = False
         yield tree
         yield HorizontalSplitter(target_id="events", min_size=4)
-        with VerticalScroll(id="detail"):
-            yield Static("", id="payload")
+        yield PayloadView(id="detail")
 
     def label(self, event: TraceEvent) -> str:
         raise NotImplementedError
@@ -81,12 +79,14 @@ class EventTree(DevPanel):
         self.selected = message.node.data
         self._show()
 
+    @property
+    def shown(self) -> str:
+        """The selected entry as shown, unwrapped (pretty text or exact JSON, by the current mode)."""
+        return self.query_one(PayloadView).shown
+
     def _show(self) -> None:
-        if self.selected is None:
-            return
-        text = pretty(self.selected)
-        self.shown = text.plain
-        self.query_one("#payload", Static).update(text)
+        if self.selected is not None:
+            self.query_one(PayloadView).show(self.selected)
 
     def copy_text(self) -> str:
         return raw(self.selected) if self.selected is not None else ""
