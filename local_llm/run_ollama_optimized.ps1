@@ -12,7 +12,7 @@ Start-Sleep -Seconds 2
 # 2. Inject your hardware performance environment flags for this window
 Write-Host "🚀 Injecting performance optimization flags..." -ForegroundColor Yellow
 $env:OLLAMA_FLASH_ATTENTION="1"
-$env:OMP_NUM_THREADS="4"
+$env:OMP_NUM_THREADS="2"
 
 Write-Host "✨ Optimizations locked in!" -ForegroundColor Green
 Write-Host "-------------------------------------------------------"
