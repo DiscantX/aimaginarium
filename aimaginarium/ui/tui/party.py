@@ -20,8 +20,12 @@ HP_CELLS = 10
 CONTROLLER_TAGS = {Controller.HUMAN: "", Controller.LLM_MCP: "AI·MCP", Controller.LLM_INTERNAL: "AI"}
 
 
-def hp_bar(member: PartyMember, cells: int = HP_CELLS) -> str:
-    """``"14/20 ▓▓▓▓▓▓▓░░░"``, or ``"HP ?"`` when the hit points are not known to the viewer."""
+def hp_bar(member, cells: int = HP_CELLS) -> str:
+    """``"14/20 ▓▓▓▓▓▓▓░░░"``, or ``"HP ?"`` when the hit points are not known to the viewer.
+
+    Args:
+        member: Anything with ``hp``, ``max_hp`` and ``hp_fraction`` (a party member or a character view).
+    """
     fraction = member.hp_fraction
     if fraction is None:
         return "HP ?"
@@ -31,12 +35,12 @@ def hp_bar(member: PartyMember, cells: int = HP_CELLS) -> str:
     return f"{member.hp}/{member.max_hp} " + "▓" * filled + "░" * (cells - filled)
 
 
-def hp_style(member: PartyMember) -> str:
-    """Name of the component class colouring the HP line."""
+def hp_style(member) -> str:
+    """The colour of the HP line as a component class suffix: ``dim``, ``hp-high``, ``hp-mid`` or ``hp-low``."""
     fraction = member.hp_fraction
     if fraction is None:
-        return "partycard--dim"
-    return "partycard--hp-high" if fraction > 0.5 else "partycard--hp-mid" if fraction > 0.25 else "partycard--hp-low"
+        return "dim"
+    return "hp-high" if fraction > 0.5 else "hp-mid" if fraction > 0.25 else "hp-low"
 
 
 class PartyCard(Widget):
@@ -88,7 +92,7 @@ class PartyCard(Widget):
         dim = self.get_component_rich_style("partycard--dim")
         text = Text()
         text.append((m.subtitle or "—") + "\n", style=dim)
-        text.append(hp_bar(m) + "\n", style=self.get_component_rich_style(hp_style(m)))
+        text.append(hp_bar(m) + "\n", style=self.get_component_rich_style(f"partycard--{hp_style(m)}"))
         text.append(" · ".join(m.statuses) or "—", style=dim)
         return text
 

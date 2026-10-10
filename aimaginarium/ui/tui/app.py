@@ -14,6 +14,7 @@ from ...api import (
     TurnRetracted, Undo,
 )
 from ...llm import ConfigError
+from ..character import CharacterView, character_from_member, characters_from_view, demo_character
 from ..party import PartyMember, demo_party, party_from_view
 from .commands import DevCommands, PlayerCommands
 from .dev import preview_roll
@@ -21,6 +22,7 @@ from .dock import dock_panes
 from .inputs import ActionInput, PasteConfirm
 from .panels import DevPanel
 from .panels.log import LogPane, LogRecorded, TuiLogHandler
+from .character import CharacterPanel
 from .party import PartyBar
 from .runner import TurnRunner
 from .settings import Settings
@@ -40,14 +42,15 @@ class GameApp(App):
     TITLE = "AImaginarium"
     CSS = """
     #story-column { width: 1fr; }
-    #story-column.with-dock { width: 55%; }
-    #dev-dock { width: 1fr; }
+    #story-column.with-dock { width: 11fr; }
+    #dev-dock { width: 9fr; }
     ActionInput { margin: 0 1; }
     """
     BINDINGS = [
         Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("f2", "toggle_dock", "Dev panels"),
         Binding("f3", "toggle_party", "Party bar"),
+        Binding("f5", "toggle_character", "Character"),
         Binding("f4", "focus_party", "Select party member", show=False),
     ]
     COMMANDS = App.COMMANDS | {DevCommands, PlayerCommands}
@@ -59,6 +62,7 @@ class GameApp(App):
         self.runner: TurnRunner
         self.log_handler: TuiLogHandler | None = None
         self.party: list[PartyMember] = []
+        self.characters: dict[str, CharacterView] = {}
         self.viewed: PartyMember | None = None
         """The party member being viewed (what a character panel shows); input still goes to the player's own."""
         self._demo_party_size: int | None = None
@@ -74,6 +78,8 @@ class GameApp(App):
         if self.settings.party_placement == "top":
             yield PartyBar("top", id="party")
         with Horizontal(id="main"):
+            yield CharacterPanel(id="character-panel")
+            yield VerticalSplitter(target_id="character-panel", min_size=28, id="character-splitter")
             with Vertical(id="story-column", classes="with-dock" if dev else ""):
                 yield StoryLog(id="story")
                 yield Thinking(id="thinking")
@@ -132,11 +138,15 @@ class GameApp(App):
     async def _load_party(self) -> None:
         """Asks for the player view and shows the party it describes (a stand-in party in dev, if one was asked for)."""
         members: list[PartyMember] = []
+        characters: dict[str, CharacterView] = {}
         async for envelope in self.session.send(GetPlayerView()):
             if isinstance(envelope.event, StateView):
                 members = party_from_view(envelope.event.data)
+                characters = characters_from_view(envelope.event.data, members)
         if self._demo_party_size is not None and members:
             members = demo_party(members[0], self._demo_party_size)
+            characters.update({m.id: demo_character(m) for m in members[1:]})
+        self.characters = characters
         await self._show_party(members)
 
     async def _show_party(self, members: list[PartyMember]) -> None:
@@ -146,6 +156,13 @@ class GameApp(App):
         await bar.set_party(members)
         self._apply_party_visibility()
         self.viewed = bar.selected
+        self._show_character()
+
+    def _show_character(self) -> None:
+        """Shows the viewed party member's character on the panel."""
+        member = self.viewed
+        view = None if member is None else self.characters.get(member.id) or character_from_member(member)
+        self.query_one(CharacterPanel).show(view)
 
     def _apply_party_visibility(self) -> None:
         """Shows the bar by the player's choice, or else when the party is more than the player alone."""
@@ -173,6 +190,7 @@ class GameApp(App):
     def _party_selected(self, event: PartyBar.Selected) -> None:
         """The viewed character changed. Only a view: the story and the input stay with the player's own character."""
         self.viewed = event.member
+        self._show_character()
 
     @on(PartyBar.Done)
     def _party_done(self) -> None:
@@ -187,6 +205,11 @@ class GameApp(App):
             bar.focus()
         else:
             self.query_one(ActionInput).focus()
+
+    def action_toggle_character(self) -> None:
+        """Shows or hides the character panel."""
+        for widget in self.query("#character-panel, #character-splitter"):
+            widget.display = not widget.display
 
     def action_focus_party(self) -> None:
         """Moves the keyboard to the party bar, if it is shown."""

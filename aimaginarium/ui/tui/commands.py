@@ -39,6 +39,7 @@ class PlayerCommands(Provider):
         side = "top" if app.settings.party_placement == "right" else "right"
         return [
             ("Toggle party bar", "Show or hide the party bar (F3)", app.action_toggle_party),
+            ("Toggle character panel", "Show or hide the character panel (F5)", app.action_toggle_character),
             (f"Move party bar to the {side}", "Switch between a row under the header and a column", app.action_move_party),
         ]
 
