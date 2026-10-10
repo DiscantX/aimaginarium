@@ -34,11 +34,13 @@ def instant(monkeypatch):
     monkeypatch.setattr(RollScreen, "min_spin", 0.0)
 
 
-def make_app(replies, die=15, opening=False, role=Role.PLAYER, auto_close=True):
+def make_app(replies, die=15, opening=False, role=Role.PLAYER, auto_close=True, devstore=None):
     store = WorldStore.open()
     create_demo_world(store)
     game = make_game(store, replies, die)[0]
-    app = GameApp(LocalServer(game, dev_enabled=True).connect(role), opening=opening)
+    if devstore is not None:
+        game.tracer.add_sink(devstore.trace_sink(store.world_id))
+    app = GameApp(LocalServer(game, dev_enabled=True, devstore=devstore).connect(role), opening=opening)
     app.settings.roll_auto_close, app.settings.roll_hold = auto_close, 0.0
     app.animation_level = "none"  # Textual reads TEXTUAL_ANIMATIONS once at import, so set it on the app itself
     return app

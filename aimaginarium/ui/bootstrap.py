@@ -14,6 +14,7 @@ from ..api import LocalServer, Role, Session
 from ..engine import Game, create_demo_world
 from ..llm import FallbackNotice, RetryNotice, factory_from_file
 from ..prompts import PromptBuilder
+from ..devstore import DevStore
 from ..trace import JsonlSink, Tracer
 from ..world import WorldStore
 
@@ -26,6 +27,8 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--world", default="worlds/demo.sqlite", help="world database file (created if missing)")
     parser.add_argument("--dev", action="store_true", help="connect with the dev role (GM view, trace)")
     parser.add_argument("--trace", help="append the trace (prompts, replies, timings, checks) to this JSON-lines file")
+    parser.add_argument("--dev-store", help="the dev store file: dev notes and the full trace of every world played "
+                                            "with --dev (default: dev.sqlite beside the world file)")
 
 
 def _notify_stderr(text: str) -> None:
@@ -59,6 +62,7 @@ class Runtime:
     begun: bool
     _tracer: Tracer
     _store: WorldStore
+    _devstore: Optional[DevStore] = None
 
     @classmethod
     def open(cls, args: argparse.Namespace, notify: Notify = _notify_stderr) -> "Runtime":
@@ -91,16 +95,24 @@ class Runtime:
             tracer.close()
             raise
         try:
+            devstore = None
+            if args.dev:                                  # the full trace and the notes are for the dev role only
+                devstore = DevStore.open(args.dev_store or Path(args.world).parent / "dev.sqlite")
+                tracer.add_sink(devstore.trace_sink(store.world_id))
             game = Game(store, llm, PromptBuilder.from_directory(), player_id, tracer=tracer)
             role = Role.DEV if args.dev else Role.PLAYER
-            session = LocalServer(game, dev_enabled=args.dev).connect(role)
+            session = LocalServer(game, dev_enabled=args.dev, devstore=devstore).connect(role)
         except BaseException:
             tracer.close()
             store.close()
+            if devstore is not None:
+                devstore.close()
             raise
-        return cls(session, begun, tracer, store)
+        return cls(session, begun, tracer, store, devstore)
 
     def close(self) -> None:
         """Flushes the trace and closes the world file."""
         self._tracer.close()
         self._store.close()
+        if self._devstore is not None:
+            self._devstore.close()

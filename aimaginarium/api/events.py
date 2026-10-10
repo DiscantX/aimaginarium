@@ -183,6 +183,26 @@ class TraceEvent(ApiEvent):
 
 
 @dataclass(frozen=True)
+class DevNoteAdded(ApiEvent):
+    """A dev note was attached to a turn (dev only).
+
+    Attributes:
+        note: The note, as :meth:`~aimaginarium.devstore.DevNote.to_dict` gives it.
+    """
+
+    roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
+    note: dict
+
+
+@dataclass(frozen=True)
+class DevNoteList(ApiEvent):
+    """The dev notes asked for with ``GetDevNotes`` (dev only), oldest first."""
+
+    roles: ClassVar[frozenset[Role]] = frozenset({Role.DEV})
+    notes: tuple = ()
+
+
+@dataclass(frozen=True)
 class Done(ApiEvent):
     """The last event of every reply stream.
 
