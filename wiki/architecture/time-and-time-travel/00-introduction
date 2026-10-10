@@ -1,0 +1,23 @@
+# Time & Time Travel In A Text-Based RPG
+
+## Scope
+
+This essay discusses both time & time travel within a text-based RPG. Its primary focus is on digital games that emulate traditional table-top RPGs; specifically, its focus is on LLM driven games, though much of it could apply to more traditional MUD-like platforms.
+
+The essay is split into two chapters, as well as this introduction, and a [research document](./99-research-scratchpad) that currently functions as a scratchpad for writing, thoughts, and conversations related to the topic.
+
+### Chapter 1: The Passage of Time
+
+This chapter primarily details the challenges of and approaches to handling [the passage of time](./01-passage-of-time) in a text-based rpg, in which advancement may be non-linear, and in fact may be non-linear for multiple characters.
+
+It also presents approaches to passing time when many players are present, such as in an MMO setting.
+
+The questions raised in this chapter, while not necessarily straightforward, have more or less been solved before; however, they raise questions that *must* be answered when building out a text-based RPG.
+
+### Chapter 2: Time Travel
+
+This essay, in my opinion, is the much more interesting of the two. It discusses a much different way of advancing through time: Traveling backwards. It proposes a mechanism for doing so that avoids many of the common pitfalls and paradoxes involved in [time travel](./02-time-travel): Branching upon causal divergence. It approaches the topic from an analytical and philosophical point of view. It presents a general technical implementation guide, though exact implementation details are deferred to a future technical document.
+
+### Research Scratchpad
+
+This document contains an assorted collection of texts that were collected while researching this topic, particualy the time travel chapter.

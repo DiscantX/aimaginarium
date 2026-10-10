@@ -1,0 +1,170 @@
+# The Passage of Time
+
+## Methods of advancing time
+
+### Single player
+
+Single player is perhaps the simplest when it comes to tracking time: An advancement of time can come whenever is convienient. If a player chooses to take a long rest, they do, and the game advances. If the DM decides time has passed and it is now night, it simply occurs. Time is fully in the hands of the player and the dm.
+
+Advancement of time through a clock is possible but not manditory. Often the narrative determines the advancement of time, rather than the advancement of time determining the narrative.
+
+#### Tabletop D&D (Single player)
+
+> *In this section We consider how tabletop D&D handles advancing time.*
+---
+> *This section requires additional verification and citation.*
+---
+> In situations where keeping track of the passage of time is important, the DM determines the time a task requires. The DM might use a different time scale depending on the context of the situation at hand. In a dungeon environment, the adventurers' movement happens on a scale of minutes. It takes them about a minute to creep down a long hallway, another minute to check for traps on the door at the end of the hall, and a good ten minutes to search the chamber beyond for anything interesting or valuable.
+>
+> In a city or wilderness, a scale of hours is often more appropriate. Adventurers eager to reach the lonely tower at the heart of the forest hurry across those fifteen miles in just under four hours' time.
+>
+> For long journeys, a scale of days works best. Following the road from Baldur's Gate to Waterdeep, the adventurers spend four uneventful days before a goblin ambush interrupts their journey.
+>
+> In combat and other fast-paced situations, the game relies on rounds, a 6-second span of time.
+>
+>[Player's Handbook 2014 (Chapter 8: Adventuring - "Time")](https://www.dndbeyond.com/sources/dnd/basic-rules-2014/adventuring#Time)
+---
+> See also: [Player's Handbook 2024 (Rules Glossary - "Time"](https://www.dndbeyond.com/sources/dnd/br-2024/rules-glossary)
+---
+
+##### Narrative scope as the decider
+
+* **Combat:** Each round lasts 6 seconds, meaning 10 rounds equal 1 minute
+* **Turns/Exploration:** In dungeons or tight spaces, time is often tracked in 10-minute turns for searching rooms, disarming traps, or moving carefully
+* **Short and Long Rests:** A short rest takes at least 1 hour, while a long rest takes 8 hours.
+* **Travel and Days:** Overlands and outdoor journeys are tracked in days or half-days, skipping minute-by-minute play and summarizing landmark changes.
+* **Downtime:** Large blocks of time (weeks, months, or years) are skipped using time jumps or downtime rules so characters can craft, train, research, or rest between major adventures.
+
+##### How DMs advance time
+
+* **Narrative Summaries:** The DM simply states how much time passes ("You spend two hours studying the library texts and emerge around noon") rather than playing out every second.
+* **Time Skips/Montages:** For travel or waiting periods, the DM jumps straight to the next point of interest, letting players make a survival or skill check or two along the way.
+* **Calendar Tracking:** DMs use a campaign calendar or simple scratchpad to note the current date, moon phases, and upcoming scheduled events.
+
+##### Takeaways
+
+* Time can be dilated. Various action and narrative types dictate how time advances.
+* Giving the DM discretion to advance time allows for a tailored experience.
+* DM discretion and variable advancement of time solves the problem of long waits between turns for the action to advance.
+
+### Co-op multiplayer (same-party)
+
+Co-op multiplayer brings with it the challenge of individual actors, all of which can be in different locations. However; in general, all players are acting roughly at the same time, and so time can be advanced in much the same manner as in single player.
+
+#### Tabletop D&D (Co-op)
+
+> *In this section We consider how tabletop D&D handles advancing time with multiple co-op players.*
+---
+> *This section requires verification and citation.*
+---
+
+Because tabletop D&D is built around the party experience, everything described in the previous [single player](#tabletop-dd-single-player) section also applies to co-op.
+
+#### Splitting of time when the party is split
+
+The question that it does not answer, however, is how to handle time when the party does the one thing that every seasoned tabletop vet knows not to do: *They split the party.*
+
+> *The following section requires verification and citation. It is copied directly from Gemini.*
+
+A DM might handle a time in a party split in a number of ways:
+
+1. Narrative Time: The "Real-Time" Match
+
+    When both split groups are exploring a town, shopping, or investigating, the DM tracks time by **matching milestones and switching groups frequently**.
+
+    * **The Scene Transition:** The DM spends 5 to 10 minutes with Group A, then cuts away to Group B at a natural stopping point or a mini-cliffhanger.
+    * **The "Mean-Time" Approximation:** The DM assumes that what took Group A 30 minutes of in-game time also took Group B roughly 30 minutes of in-game time, keeping the overall timeline aligned.
+    * **The Synchronized Meet-Up:** If Group A decides to wait at a tavern for Group B at sundown, the DM fast-forwards Group A's timeline and focuses entirely on Group B until they reach the sundown milestone.
+
+2. Combat Time: The Initiative Freeze
+
+    Time tracking becomes rigid the moment **one group enters combat while the other does not**. Combat rounds last exactly **6 seconds**.
+
+    If Group A starts a fight in a dungeon while Group B is a mile away strolling back from town, the DM must "freeze" Group B.
+
+    * **The Problem:** A massive 5-round combat encounter feels long to the players, but it only takes **30 seconds** of in-game time.
+    * **The Solution:** While Group A takes their combat rounds, Group B essentially gets no actions because they cannot accomplish anything meaningful in 30 seconds. The DM will run the entire combat first. Once the fight ends, the DM resets the clock and asks Group B what they did during those few minutes.
+
+3. The Synchronization Trap (The "Quantum Split")
+
+    The trickiest situation occurs when Group A enters combat, and Group B rushes to reinforce them. To handle this, DMs use **Initiative Sync**:
+
+      1. **Roll Initiative immediately** for Group A and the monsters.
+      2. **Calculate the distance** Group B needs to travel. If Group B is 300 feet away and moves at 30 feet per round, it will take them exactly 10 rounds (1 minute) to arrive.
+      3. **Track the rounds.** Group B can use their turn each round to Dash closer, while Group A fights for survival. Group B physically enters the turn order map on round 11.
+
+### Persistent MMO with shared game state
+
+The question of how to handle time when many players share the same world is not necessarily trivial; in essense it is a party split in which the party contains dozens, hundreds, or even thousands of players.
+
+Consider what happens when one player decides to rest. Sometimes this may be done to recover their stats; sometimes it might be done to advance the narrative. To the player, time must advance to the next day. To everyone else, the second hand has only ticked once.
+
+This nessitates a unified world time. The LLM must always be aware of this time, and must always craft the story around it. If it is night time for one player, it is night time for all.
+
+This poses a major gameplay problem. To return to the long rest example, what does it look like for the player when they take a long rest? The only answer is the character rests, and no other action can be taken until they wake. This may be acceptable for some players, and may be considered to be desirable as it is more realistic, more immersive.
+
+But what does the player *do* while their character rests? The best answer may simply be to encourage them to switch to another character, either in the same MMO, or maybe in a single player or co-op game.
+
+#### Time Dilation
+
+There is a mitigation to this, and it involves time dilation. This may sound like sci-fi, but it is much simpler, and is a tried and true practice used by many games.
+
+One option when advancing in game time is to have it advance 1:1 — 1 in-game hour equals 1 real world hour. But that is not the only option. You can compress time however you would like; if you have 1 real world hour equal 6 in-game hours, the player can play in the morning, have their long rest before leaving for work, and be ready to play again by their lunch break.
+
+##### Offset time dilation
+
+There is an additional problem with using the real clock on the wall to advance game time, and that is that the same game time will always occur at the same time every real-world day. I call this the Pokémon Gold problem — a player who only has the opportunity to play at a certain time of day, say after school or when the kids are in bed, will only ever experience a single in-game time. Some players' characters may never see the light of day.
+
+The solution is to introduce a controlled time offset. Rather than making the game clock advance at a constant one-to-one rate with the real clock, game time can be made to advance slightly faster. This introduces a deliberate offset between real time and game time. Each real-world day, the game clock gains a small amount of additional time, causing the in-game time at which a player encounters an event to gradually shift from day to day.
+
+For example, suppose the game is intended to experience two full days for every real-world day, while also drifting one hour ahead for each real-world day. The first day might begin with an in-game time of 8:00 AM. The following real-world day, the corresponding point in the game would occur at 9:00 AM, then 10:00 AM on the next day, and so on. A player who consistently plays at 8:00 PM would therefore not remain permanently trapped in the same portion of the game world's day/night cycle.
+
+The amount of dilation required can be calculated rather than chosen arbitrarily. The resulting multiplier determines how quickly game time must advance to both achieve the desired number of in-game days and produce the desired daily drift. This makes the offset predictable and tunable: increasing the drift causes the game clock to rotate through the day/night cycle more quickly, while reducing it makes the game more closely follow the real clock.
+
+The generalized formula is:
+
+$$
+\text{Time Multiplier} =
+\frac{D_{\text{game}} \times H_{\text{real}}}
+{H_{\text{real}} - H_{\text{drift}}}
+$$
+
+This approach preserves the advantages of using the real clock as the foundation for game time while avoiding its most significant drawback: a player's real-world schedule no longer permanently determines which part of the game world's day they get to experience.
+
+## How it Works
+
+## Variable Definitions
+
+| Formula | Description |
+| --- | --- |
+| **Time Multiplier** | The final speed multiplier value you need to input into your game config or script, where `1.0` is real-time. |
+| $D_{\text{game}}$ | The base or target number of full in-game days you want to fit into a standard real-world cycle. |
+| $H_{\text{real}}$ | The number of hours in a standard real-world day, typically `24`. |
+| $H_{\text{drift}}$ | The number of hours you want the game clock to drift **ahead** each real day, e.g. `1` for a 1-hour drift. |
+
+If you plug specific numbers into the generalized formula:
+
+$$
+D_{\text{game}} = 2 \text{ (days)}
+$$
+
+$$
+H_{\text{real}} = 24 \text{ (hours)}
+$$
+
+$$
+H_{\text{drift}} = 1 \text{ (hour ahead)}
+$$
+
+Therefore:
+
+$$
+\text{Time Multiplier}
+= \frac{2 \times 24}{24 - 1}
+= \frac{48}{23}
+= 2.086956
+$$
+
+### Similarities to mobile games
+
+There is precedence for time-gating gameplay; a look at many mobile games will show a pattern of a limited number of actions that can be taken, that refill over time. Long play sessions that allow the player to advance far in the game quickly are eshewed in the favor of brief sessions, in which the player doesn't reach the end game until months or years later.

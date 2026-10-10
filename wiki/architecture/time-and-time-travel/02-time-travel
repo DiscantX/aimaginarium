@@ -1,0 +1,137 @@
+# Time Travel
+
+The Time Travel section fundamentally redefines in-game causality by mapping temporal mechanics to version control concepts like branching, merging, and rebasing. Rather than attempting to simulate every atom of a world, the proposed engine relies on the "lazy evaluation" of reality. If an event or entity is not explicitly recorded in the database's event log, it does not exist, meaning players can interact with the past without immediately fracturing the timeline.
+
+## Ruleset
+
+This ruleset follows a branching paradigm of backward time travel: Every action made by a traveler that would change an established fact in the timeline forces a new branch on the parent timeline. The new branch shares the history of the parent branch; all new actions on the new branch are recorded independant of the parent branch. Events after the divergence point do not cross over.
+
+Classic time travel paradoxes, such as the grandfather paradox, cease to be logical contradictions under this descendant branching model; you cannot kill your own grandfather, preventing your own birth, because your grandfather exists on a different branch. In this model, killing your grandfather means killing the new branch's "you"'s grandfather.
+
+**Rules:**
+
+* Because the event log only records established facts, minor actions in the past do not trigger a timeline branch unless they explicitly contradict an established "Anchor Entity".
+
+    > **(Note)** Explore the concept of `anchor entity`. Gemini invented this.
+
+* A time traveler cannot alter the history from which they originated.
+* Any causal change to a traveler's established history necessarily produces a new descendant branch, such as moving from the "Main" timeline to a "Prime" timeline.
+
+* Entities, physical objects, and knowledge are treated equally and carry their causal provenance with them when moving across branches.
+* Database conflicts created by cross-branch travel are resolved using a composite primary key consisting of the entity's UUID and its origin branch ID.
+    > **(Note)** It was debated whether or not branch ID should be included in the UUID.
+* When identical entities from different branches exist in the same space, the LLM takes over the clone as an autonomous agent to resolve the paradox narratively rather than crashing the database.
+    > **(Proposed)** The role of LLMs as in-game agents leads to intriguing possibilities and needs further discussion.
+
+## Branching
+
+The branching concept can be best visualized by the following diagram.
+
+```mermaid
+%%{init: {
+  'flowchart': {
+    'curve': ''
+  },
+  'themeVariables': {
+    'lineColor': '#333'
+  }
+}}%%
+flowchart BT
+
+    %% Node Definitions
+    MainStart["Main"]
+    SplitNode((" "))
+    PrimeStart(("Causal\nDivergence\n- Main -"))
+    PrimePrimeStart(("Causal\nDivergence\n- Prime -"))
+    PrimePrimeEnd(("Prime Prime"))
+    PrimeEnd["Prime"]
+    TravelStart((" "))
+    MainEnd[" "]
+
+    %% Custom Font Class Configuration
+    classDef smallFont font-size:9px;
+    class PrimeStart smallFont;
+    class PrimePrimeStart smallFont;
+
+    %% Prime Prime Branch Off Shoot
+    PrimePrimeStart --> PrimePrimeEnd
+
+    %% Prime Branch Off Shoot
+    PrimeStart --> PrimePrimeStart
+    PrimePrimeStart --> PrimeEnd
+
+    %% Main Timeline Flow
+    MainStart --> SplitNode
+    SplitNode --> PrimeStart
+    PrimeStart --> TravelStart
+    TravelStart --> MainEnd
+
+    %% Travel Back Loop
+    TravelStart -- "Travel Back" --> SplitNode
+
+    %% Styling Elements
+    style MainStart fill:none,stroke:none
+    style MainEnd fill:none,stroke:none
+    style PrimeStart fill:none,stroke:none
+    style PrimeEnd fill:none,stroke:none
+    style PrimePrimeStart fill:none,stroke:none
+    style PrimePrimeEnd fill:none,stroke:none
+    style SplitNode fill:#333,stroke:#333,width:0px,height:0px
+    style TravelStart fill:#333,stroke:#333,width:0px,height:0px
+
+    %% Link Color Overrides
+    linkStyle 3,4,5,6 stroke:#333,stroke-width:5px
+
+    linkStyle 7 stroke:#00a2e8,stroke-width:2px
+    
+    linkStyle 1,2 stroke:#800020,stroke-width:3px
+    linkStyle 0 stroke:#808020,stroke-width:3px
+```
+
+| Appearance | Name | Meaning |
+| --- | --- | --- |
+| Thick grey line | Main Timeline | The original, or `Main` timeline. This is the timeline players follow if they have not traveled backward through time. |
+| Blue line | Travel back | The time traveller's journey to an earlier point in the timeline. Arrival does not, in itself, cause a divergence. |
+| Red line | Prime Timeline | The `Prime` timeline. This is the timeline created when a player makes an action that would have a causul effect downstream on the Main timeline. |
+| Gold line | Prime Prime Timeline | The `Prime Prime` timeline. This is the timeline created when a player makes an action that would have a causul effect downstream on the Prime timeline. |
+| Transparent Node | Causal divergence | A point at which an event changes downstream causality, producing a new timeline. Changes that do not affect downstream causality do not require a divergence. |
+
+### Consequences of Lazy Evaluation
+
+Our proposal says that a branch is created only when a causal conflict occurs. It does not happen at the moment the time traveler arrives at their destination. This allows them to continue on the same branch, *so long as they make no changes that propogate through the already-established casaul chain.*
+
+This is allowed through the lazy evaluation and creation of items, characters, locations, and their causal connections.
+
+In our engine, an item only comes into existence when the LLM imagines it, decides it is important, and logs it to the database. Before this point, there is no casaul chain to it. In a sense, the LLM breathes life into it.
+
+#### The Butterfly Effect, Squished Bugs, & Coffee
+
+Imagine an engine that simulates everything. Every item in the universe, every atom they are composed of, and every casaul relationship thereof. A time traveler that arrives in the past cannot hope to make any action without disturbing the casual chain. This is the classic **Butterfly Effect**. which states that a small, seemingly insignificant change in the initial conditions of a complex, interconnected system can lead to dramatically large and unpredictable outcomes later on.
+
+We find an example of this in the television show *The Simpoons*, where in one episode Homer creates a time machine and travels to the time of the dinosaurs. Here, in a flashback, Homer receives a stern warning from Grandpa Simpson not to step on or touch anything, because even the tiniest change will alter the future. Right after promising to stay still, a prehistoric mosquito flies by. Homer says, "Stupid bug! You go squish now!" and kills it. When Homer returns, he faces a now-changed, dystopian world. All the result of the squished bug.
+
+We use the *cup of coffee* example to explore this concept by presenting the question: Can the player travel back in time, drink a cup of coffee, and return to the present without having upset causality? In our engine's lazy evaluation model, we find the answer to be yes, they can. In an engine that models literally everything, we find it to be impossible.
+
+Consider first the engine that models everything. The player arrives in the past and pours their coffee. In the process, they sit down in a wooden chair, pour the last cup from the pot, drink, and leave back to their own time.
+
+Let's consider now all of these objects. Because they and everything else have already been recorded down the causul line, even these simple actions necitate the creation of a new branch. Perhaps the chair being out of place causes someone to trip and hit their head, perhaps the missing coffee causes a very grumpy orc to go on a rampage. Everything the player has interacted with would have ripples down the timeline.
+
+Now consider our lazy evaluation model. The sequence of actions is the same. The player tells the LLM "I sit down and have a cup of coffeee." The LLM fabricates the coffee, adds it into the event log as something that has occured (which is fundamentaly indistinct from other entries), and there is no casaul chain to disturb — because there was never one to begin with. The grumpy orc cannot go on a rampage, because it never knew of the existence of the coffee to begin with.
+
+In lazy evaluation, it is entirely possible for two travelers to meet at a designated time and place, enjoy a cup of mocha, and part ways, with none being the wiser.
+
+## Version control as the time machine engine
+
+> This section is partly written. When written, it will mostly be specultive. If the ideas are built out, they should come later, and should be tested on another branch or fork.
+
+Points to mention: TerminusDB, version control branching, a jump back in time creates a new branch OR a new branch is created as soon as the event/causality logs diverge. Question: Does an isolated action necessitate a new branch or can it be merged into an existing one safely? Do we use some version of merge conflicts for this? (merge & rebase onto past commit).
+
+### Basic structure as it exists today
+
+Currently we create an event log of every action that changes the world in an sqlite database, with plans to migrate to Postgres. This log allows for us to both undo actions and replay the entire log (currently unbuilt & unplanned, but a replay feature could plausibly be built). Currently, there is no native branching or merging; branching could be done feasibly in a database like Postgres using snapshots or cloning the database, but it will balloon quickly, and get messy. There is no native way to perform merges or to look for merge conflicts.
+
+### Time travel using past versions
+
+## Time travel to the future
+
+> Partially explored in research doc.
