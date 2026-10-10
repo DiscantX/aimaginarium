@@ -27,6 +27,10 @@ Early build. Storytelling essays are done, architecture and tech stack are draft
 
 Statements are tagged **[Decided]** (Ficus stated or accepted), **[Proposed]** (Claude proposed, discussed, not explicitly confirmed) or **[Open]**. Do not promote a Proposed item to Decided without confirmation.
 
+## Code conventions
+
+- No layout in strings for text that can wrap (indents, bullets, gutters): a widget wraps the string afterwards and continuation lines lose the prefix. Use `Hanging` (`aimaginarium/ui/tui/hanging.py`) and test it with `tests/layout_helpers.py`.
+
 ## Layout
 
 - `wiki/story/`: storytelling essays
