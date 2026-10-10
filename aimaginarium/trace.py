@@ -144,6 +144,20 @@ def summarize(kind: str, p: dict[str, Any]) -> str:
         parts.append(f"{u.get('prompt_tokens', 0)} in / {u.get('output_tokens', 0)} out")
         if u.get("cached_tokens"):
             parts.append(f"{u['cached_tokens']} cached")
+        if u:
+            try:
+                from .llm.cost import estimate_cost
+                from .llm.base import Usage
+                usage_obj = Usage(
+                    prompt_tokens=u.get("prompt_tokens", 0),
+                    cached_tokens=u.get("cached_tokens"),
+                    output_tokens=u.get("output_tokens", 0),
+                )
+                cost = estimate_cost(p.get("model", ""), usage_obj)
+                if cost.total_cost > 0:
+                    parts.append(f"${cost.total_cost:.4f}")
+            except Exception:
+                pass
         return ", ".join(x for x in parts if x)
     if kind == "llm.failed":
         return f"{p.get('task', '?')}: {p.get('error')}"
